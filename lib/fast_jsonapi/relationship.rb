@@ -20,8 +20,7 @@ module FastJsonapi
       transform_method:,
       links:,
       meta:,
-      lazy_load_data: false,
-      options:
+      lazy_load_data: false
     )
       @owner = owner
       @key = key
@@ -41,7 +40,6 @@ module FastJsonapi
       @lazy_load_data = lazy_load_data
       @record_types_for = {}
       @serializers_for_name = {}
-      @options = options # guaranteed to be set
     end
 
     def serialize(record, included, serialization_params, output_hash)
@@ -53,18 +51,18 @@ module FastJsonapi
         initialize_static_serializer unless @initialized_static_serializer
 
         if relationship_type == :has_many
-          if @static_serializer && @options.dig(:nest_level) < NEST_MAX_LEVEL
+          if @static_serializer # && @options.dig(:nest_level) < NEST_MAX_LEVEL
             data = relevant_objs.each_with_object([]) do |sub_obj, array|
               array << @static_serializer.new(sub_obj, @options).serializable_hash
             end
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included # && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
           end
         else
-          if @static_serializer && @options.dig(:nest_level) < NEST_MAX_LEVEL
+          if @static_serializer # && @options.dig(:nest_level) < NEST_MAX_LEVEL
             data = @static_serializer.new(relevant_objs, @options).serializable_hash
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included # && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
           end
         end
         output_hash[@name] = data

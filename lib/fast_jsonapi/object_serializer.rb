@@ -75,29 +75,29 @@ module FastJsonapi
     private
 
     def process_options(options)
-      @fieldsets = deep_symbolize(options[:fields].presence || {})
+      @fieldsets = deep_symbolize(options&.dig(:fields) || {})
       @params = {}
 
       if options.blank? || options.empty?
         @options = {}
         @options[:nest_level] = 1
-        return
-      end
-      @options = options
-      if @options[:nest_level]
-        @options[:nest_level] += 1
+        @params = {}
       else
-        @options[:nest_level] = 1
+        @options = options
+        if @options[:nest_level]
+          @options[:nest_level] += 1
+        else
+          @options[:nest_level] = 1
+        end
+        @params = options[:params] || {}
+        raise ArgumentError, '`params`  passed within options to serializer must be a hash' unless @params.is_a?(Hash)
       end
 
-      @known_included_objects = Set.new
-      @meta = options[:meta]
-      @links = options[:links]
-      @is_collection = options[:is_collection]
-      @params = options[:params] || {}
+      #@known_included_objects = Set.new # going away.. far far away
+      @meta = @options[:meta]
+      @links = @options[:links]
+      @is_collection = @options[:is_collection]
       @params[:system_type] = self.class.system_type if self.class.system_type.present?
-      raise ArgumentError, '`params` option passed to serializer must be a hash' unless @params.is_a?(Hash)
-
     end
 
     def deep_symbolize(collection)
@@ -281,8 +281,7 @@ module FastJsonapi
           transform_method: @transform_method,
           meta: options[:meta],
           links: options[:links],
-          lazy_load_data: options[:lazy_load_data],
-          options: @options # maintain context all the way through
+          lazy_load_data: options[:lazy_load_data]
         )
       end
 
