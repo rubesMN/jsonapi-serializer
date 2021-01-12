@@ -17,6 +17,7 @@ module FastJsonapi
                       :uncachable_relationships_to_serialize,
                       :transform_method,
                       :record_type,
+                      :system_type,
                       :record_id,
                       :cache_store_instance,
                       :cache_store_options,
@@ -35,8 +36,8 @@ module FastJsonapi
       end
 
       def links_hash(record, params = {})
-        data_links.each_with_object({}) do |(_k, link), hash|
-          link.serialize(record, params, hash)
+        data_links.each_with_object([]) do |link, array|
+          link.serialize(record, params, array)
         end
       end
 
@@ -70,20 +71,19 @@ module FastJsonapi
           cache_opts = record_cache_options(cache_store_options, fieldset, includes_list, params)
           record_hash = cache_store_instance.fetch(record, **cache_opts) do
             temp_hash = id_hash(id_from_record(record, params), record_type, true)
-            temp_hash[:attributes] = attributes_hash(record, fieldset, params) if attributes_to_serialize.present?
-            temp_hash[:relationships] = relationships_hash(record, cachable_relationships_to_serialize, fieldset, includes_list, params) if cachable_relationships_to_serialize.present?
-            temp_hash[:links] = links_hash(record, params) if data_links.present?
+            temp_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
+            temp_hash.merge!(relationships_hash(record, cachable_relationships_to_serialize, fieldset, includes_list, params)) if cachable_relationships_to_serialize.present?
+            temp_hash[:_links] = links_hash(record, params) if data_links.present?
             temp_hash
           end
-          record_hash[:relationships] = (record_hash[:relationships] || {}).merge(relationships_hash(record, uncachable_relationships_to_serialize, fieldset, includes_list, params)) if uncachable_relationships_to_serialize.present?
         else
-          record_hash = id_hash(id_from_record(record, params), record_type, true)
-          record_hash[:attributes] = attributes_hash(record, fieldset, params) if attributes_to_serialize.present?
-          record_hash[:relationships] = relationships_hash(record, nil, fieldset, includes_list, params) if relationships_to_serialize.present?
-          record_hash[:links] = links_hash(record, params) if data_links.present?
+          record_hash = { id: id_from_record(record, params) }
+          record_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
+          record_hash.merge!(relationships_hash(record, nil, fieldset, includes_list, params)) if relationships_to_serialize.present?
+          record_hash[:_links] = links_hash(record, params) if data_links.present?
         end
 
-        record_hash[:meta] = meta_hash(record, params) if meta_to_serialize.present?
+        record_hash[:_meta] = meta_hash(record, params) if meta_to_serialize.present?
         record_hash
       end
 
@@ -126,76 +126,6 @@ module FastJsonapi
         record.id
       end
 
-      # It chops out the root association (first part) from each include.
-      #
-      # It keeps an unique list and collects all of the rest of the include
-      # value to hand it off to the next related to include serializer.
-      #
-      # This method will turn that include array into a Hash that looks like:
-      #
-      #   {
-      #       authors: Set.new([
-      #         'books',
-      #         'books.genre',
-      #         'books.genre.books',
-      #         'books.genre.books.authors',
-      #         'books.genre.books.genre'
-      #       ]),
-      #       genre: Set.new(['books'])
-      #   }
-      #
-      # Because the serializer only cares about the root associations
-      # included, it only needs the first segment of each include
-      # (for books, it's the "authors" and "genre") and it doesn't need to
-      # waste cycles parsing the rest of the include value. That will be done
-      # by the next serializer in line.
-      #
-      # @param includes_list [List] to be parsed
-      # @return [Hash]
-      def parse_includes_list(includes_list)
-        includes_list.each_with_object({}) do |include_item, include_sets|
-          include_base, include_remainder = include_item.to_s.split('.', 2)
-          include_sets[include_base.to_sym] ||= Set.new
-          include_sets[include_base.to_sym] << include_remainder if include_remainder
-        end
-      end
-
-      # includes handler
-      def get_included_records(record, includes_list, known_included_objects, fieldsets, params = {})
-        return unless includes_list.present?
-        return [] unless relationships_to_serialize
-
-        includes_list = parse_includes_list(includes_list)
-
-        includes_list.each_with_object([]) do |include_item, included_records|
-          relationship_item = relationships_to_serialize[include_item.first]
-
-          next unless relationship_item&.include_relationship?(record, params)
-
-          included_objects = Array(relationship_item.fetch_associated_object(record, params))
-          next if included_objects.empty?
-
-          static_serializer = relationship_item.static_serializer
-          static_record_type = relationship_item.static_record_type
-
-          included_objects.each do |inc_obj|
-            serializer = static_serializer || relationship_item.serializer_for(inc_obj, params)
-            record_type = static_record_type || serializer.record_type
-
-            if include_item.last.any?
-              serializer_records = serializer.get_included_records(inc_obj, include_item.last, known_included_objects, fieldsets, params)
-              included_records.concat(serializer_records) unless serializer_records.empty?
-            end
-
-            code = "#{record_type}_#{serializer.id_from_record(inc_obj, params)}"
-            next if known_included_objects.include?(code)
-
-            known_included_objects << code
-
-            included_records << serializer.record_hash(inc_obj, fieldsets[record_type], includes_list, params)
-          end
-        end
-      end
     end
   end
 end

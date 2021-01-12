@@ -1,5 +1,7 @@
+require 'fast_jsonapi/constants'
 module FastJsonapi
   class Relationship
+    include Constants
     attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :cached, :polymorphic, :conditional_proc, :transform_method, :links, :meta, :lazy_load_data
 
     def initialize(
@@ -18,7 +20,8 @@ module FastJsonapi
       transform_method:,
       links:,
       meta:,
-      lazy_load_data: false
+      lazy_load_data: false,
+      options:
     )
       @owner = owner
       @key = key
@@ -33,22 +36,39 @@ module FastJsonapi
       @polymorphic = polymorphic
       @conditional_proc = conditional_proc
       @transform_method = transform_method
-      @links = links || {}
+      @links = links || []
       @meta = meta || {}
       @lazy_load_data = lazy_load_data
       @record_types_for = {}
       @serializers_for_name = {}
+      @options = options # guaranteed to be set
     end
 
     def serialize(record, included, serialization_params, output_hash)
       if include_relationship?(record, serialization_params)
-        empty_case = relationship_type == :has_many ? [] : nil
 
-        output_hash[key] = {}
-        output_hash[key][:data] = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included
+        data = nil
+        relevant_objs = fetch_associated_object(record, serialization_params)
 
-        add_meta_hash(record, serialization_params, output_hash) if meta.present?
-        add_links_hash(record, serialization_params, output_hash) if links.present?
+        initialize_static_serializer unless @initialized_static_serializer
+
+        if relationship_type == :has_many
+          if @static_serializer && @options.dig(:nest_level) < NEST_MAX_LEVEL
+            data = relevant_objs.each_with_object([]) do |sub_obj, array|
+              array << @static_serializer.new(sub_obj, @options).serializable_hash
+            end
+          else
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+          end
+        else
+          if @static_serializer && @options.dig(:nest_level) < NEST_MAX_LEVEL
+            data = @static_serializer.new(relevant_objs, @options).serializable_hash
+          else
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+          end
+        end
+        output_hash[@name] = data
+
       end
     end
 
@@ -63,28 +83,6 @@ module FastJsonapi
         FastJsonapi.call_proc(conditional_proc, record, serialization_params)
       else
         true
-      end
-    end
-
-    def serializer_for(record, serialization_params)
-      # TODO: Remove this, dead code...
-      if @static_serializer
-        @static_serializer
-
-      elsif polymorphic
-        name = polymorphic[record.class] if polymorphic.is_a?(Hash)
-        name ||= record.class.name
-        serializer_for_name(name)
-
-      elsif serializer.is_a?(Proc)
-        FastJsonapi.call_proc(serializer, record, serialization_params)
-
-      elsif object_block
-        serializer_for_name(record.class.name)
-
-      else
-        # TODO: Remove this, dead code...
-        raise "Unknown serializer for object #{record.inspect}"
       end
     end
 
@@ -103,36 +101,27 @@ module FastJsonapi
     def ids_hash_from_record_and_relationship(record, params = {})
       initialize_static_serializer unless @initialized_static_serializer
 
-      return ids_hash(fetch_id(record, params), @static_record_type) if @static_record_type
+      return ids_hash(fetch_id(record, params), @static_record_type, params) # if @static_record_type
 
-      return unless associated_object = fetch_associated_object(record, params)
-
-      if associated_object.respond_to? :map
-        return associated_object.map do |object|
-          id_hash_from_record object, params
-        end
-      end
-
-      id_hash_from_record associated_object, params
     end
 
-    def id_hash_from_record(record, params)
-      associated_record_type = record_type_for(record, params)
-      id_hash(record.public_send(id_method_name), associated_record_type)
+
+    def ids_hash(ids, record_type, params)
+      return ids.map { |id| id_hash(id, record_type, params) } if ids.respond_to? :map
+
+      id_hash(ids, record_type, params) # ids variable is just a single id here
     end
 
-    def ids_hash(ids, record_type)
-      return ids.map { |id| id_hash(id, record_type) } if ids.respond_to? :map
-
-      id_hash(ids, record_type) # ids variable is just a single id here
-    end
-
-    def id_hash(id, record_type, default_return = false)
+    def id_hash(id, record_type, params, default_return = false)
       if id.present?
-        { id: id.to_s, type: record_type }
+        { id: id.to_s, _links: trivial_link_hash(id, record_type, params) }
       else
-        default_return ? { id: nil, type: record_type } : nil
+        default_return ? { id: nil } : nil
       end
+    end
+
+    def trivial_link_hash(id, record_type, params = {})
+      Link.serialize_rails_simple_self(id, record_type, params)
     end
 
     def fetch_id(record, params)
@@ -146,11 +135,12 @@ module FastJsonapi
     end
 
     def add_links_hash(record, params, output_hash)
-      output_hash[key][:links] = if links.is_a?(Symbol)
+      output_hash[key][:_links] = if links.is_a?(Symbol)
                                    record.public_send(links)
                                  else
-                                   links.each_with_object({}) do |(key, method), hash|
-                                     Link.new(key: key, method: method).serialize(record, params, hash)
+                                   links.each_with_object([]) do |link, array|
+                                     # Link.new(key: key, method: method).serialize(record, params, hash)
+                                     link.serialize(record, params, array)
                                    end
                                  end
     end
@@ -212,16 +202,10 @@ module FastJsonapi
 
     def serializer_for_name(name)
       @serializers_for_name[name] ||= owner.serializer_for(name)
+    rescue NameError
+      @serializers_for_name[name] ||= nil
     end
 
-    def record_type_for(record, serialization_params)
-      # if the record type is static, return it
-      return @static_record_type if @static_record_type
-
-      # if not, use the record type of the serializer, and memoize the transformed version
-      serializer = serializer_for(record, serialization_params)
-      @record_types_for[serializer] ||= run_key_transform(serializer.record_type)
-    end
 
     def compute_static_record_type
       if polymorphic

@@ -1,12 +1,16 @@
 # JSON:API Serialization Library
 
-A fast [JSON:API](https://jsonapi.org/) serializer for Ruby Objects.
+A fast serializer for Ruby Objects not in the jsonapi spec.  Just get your stuff fast. thats it
 
-Previously this project was called **fast_jsonapi**, we forked the project
-and renamed it to **jsonapi/serializer** in order to keep it alive.
+Previously this project was called **jsonapi-serializer**, we forked the project
+and renamed it to **jsonapi/serializer** in order to remove restrictions around nested
+'include'd objects being within a completely separate key making parsing json not the
+way pretty much most of the internet does it.  Also, disliked the 'attributes', 'type' and 'relationships' 
+keys and even the concepts of relationships being specified with only an ID and type,..  but kept the 'meta' and '_links'
 
-We would like to thank the Netflix team for the initial work and to all our
-contributors and users for the continuous support!
+Also, nobody changes the README file for any changes they do,.. which is frustrating.  
+
+I would like to thank the Netflix teamand the jsonapi-serializer teams for their initial work!
 
 # Performance Comparison
 
@@ -51,6 +55,9 @@ article in the `docs` folder for any questions related to methodology.
 * Support for compound documents (included)
 * Optimized serialization of compound documents
 * Caching
+
+## Requirements
+Ruby 2.3.5+
 
 ## Installation
 
@@ -403,7 +410,7 @@ end
 `#fetch(record, **options, &block)` method:
 
 - `record` is the record that is currently serialized
-- `options` is everything that was passed to `cache_options` except `store`, so it can be everyhing the cache store supports
+- `options` is everything that was passed to `cache_options` except `store`, so it can be everything the cache store supports
 - `&block` should be executed to fetch new data if cache is empty
 
 So for the example above it will call the cache instance like this:

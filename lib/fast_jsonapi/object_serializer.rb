@@ -9,11 +9,13 @@ require 'fast_jsonapi/attribute'
 require 'fast_jsonapi/relationship'
 require 'fast_jsonapi/link'
 require 'fast_jsonapi/serialization_core'
+require 'fast_jsonapi/constants'
 
 module FastJsonapi
   module ObjectSerializer
     extend ActiveSupport::Concern
     include SerializationCore
+    include Constants
 
     TRANSFORMS_MAPPING = {
       camel: :camelize,
@@ -25,11 +27,11 @@ module FastJsonapi
     included do
       # Set record_type based on the name of the serializer class
       set_type(reflected_record_type) if reflected_record_type
+      add_self_link
     end
 
     def initialize(resource, options = {})
       process_options(options)
-
       @resource = resource
     end
 
@@ -43,32 +45,30 @@ module FastJsonapi
     alias to_hash serializable_hash
 
     def hash_for_one_record
-      serializable_hash = { data: nil }
-      serializable_hash[:meta] = @meta if @meta.present?
-      serializable_hash[:links] = @links if @links.present?
+      serializable_hash = {  }
 
-      return serializable_hash unless @resource
+      if @resource
+        serializable_hash = self.class.record_hash(@resource, @fieldsets[self.class.record_type.to_sym], nil, @params)
+        serializable_hash[:_meta] = @meta if @meta.present?
+        serializable_hash[:_links] = @links if @links.present?
+      else
+        serializable_hash[:_meta] = @meta if @meta.present?
+        serializable_hash[:_links] = @links if @links.present?
+      end
 
-      serializable_hash[:data] = self.class.record_hash(@resource, @fieldsets[self.class.record_type.to_sym], @includes, @params)
-      serializable_hash[:included] = self.class.get_included_records(@resource, @includes, @known_included_objects, @fieldsets, @params) if @includes.present?
       serializable_hash
     end
 
     def hash_for_collection
-      serializable_hash = {}
-
       data = []
-      included = []
       fieldset = @fieldsets[self.class.record_type.to_sym]
       @resource.each do |record|
         data << self.class.record_hash(record, fieldset, @includes, @params)
-        included.concat self.class.get_included_records(record, @includes, @known_included_objects, @fieldsets, @params) if @includes.present?
       end
 
-      serializable_hash[:data] = data
-      serializable_hash[:included] = included if @includes.present?
-      serializable_hash[:meta] = @meta if @meta.present?
-      serializable_hash[:links] = @links if @links.present?
+      serializable_hash = data
+      serializable_hash[:_meta] = @meta if @meta.present?
+      serializable_hash[:_links] = @links if @links.present?
       serializable_hash
     end
 
@@ -78,19 +78,26 @@ module FastJsonapi
       @fieldsets = deep_symbolize(options[:fields].presence || {})
       @params = {}
 
-      return if options.blank?
+      if options.blank? || options.empty?
+        @options = {}
+        @options[:nest_level] = 1
+        return
+      end
+      @options = options
+      if @options[:nest_level]
+        @options[:nest_level] += 1
+      else
+        @options[:nest_level] = 1
+      end
 
       @known_included_objects = Set.new
       @meta = options[:meta]
       @links = options[:links]
       @is_collection = options[:is_collection]
       @params = options[:params] || {}
+      @params[:system_type] = self.class.system_type if self.class.system_type.present?
       raise ArgumentError, '`params` option passed to serializer must be a hash' unless @params.is_a?(Hash)
 
-      if options[:include].present?
-        @includes = options[:include].reject(&:blank?).map(&:to_sym)
-        self.class.validate_includes!(@includes)
-      end
     end
 
     def deep_symbolize(collection)
@@ -134,7 +141,7 @@ module FastJsonapi
         return @reflected_record_type if defined?(@reflected_record_type)
 
         @reflected_record_type ||= begin
-          name.split('::').last.chomp('Serializer').underscore.to_sym if name&.end_with?('Serializer')
+          name.split('::').last.chomp('Serializer').underscore.gsub("JsonApi",'').to_sym if name&.end_with?('Serializer')
         end
       end
 
@@ -163,6 +170,16 @@ module FastJsonapi
         set_key_transform :dash
       end
 
+      def set_system_type(system_type_name)
+        self.system_type = system_type_name
+      end
+
+      def add_self_link
+        link rel: :self do |obj|
+          "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
+        end
+      end
+
       def set_type(type_name)
         self.record_type = run_key_transform(type_name)
       end
@@ -172,32 +189,8 @@ module FastJsonapi
       end
 
       def cache_options(cache_options)
-        # FIXME: remove this if block once deprecated cache_options are not supported anymore
-        unless cache_options.key?(:store)
-          # fall back to old, deprecated behaviour because no store was passed.
-          # we assume the user explicitly wants new behaviour if he passed a
-          # store because this is the new syntax.
-          deprecated_cache_options(cache_options)
-          return
-        end
-
         self.cache_store_instance = cache_options[:store]
         self.cache_store_options = cache_options.except(:store)
-      end
-
-      # FIXME: remove this method once deprecated cache_options are not supported anymore
-      def deprecated_cache_options(cache_options)
-        warn('DEPRECATION WARNING: `store:` is a required cache option, we will default to `Rails.cache` for now. See https://github.com/fast-jsonapi/fast_jsonapi#caching for more information.')
-
-        %i[enabled cache_length].select { |key| cache_options.key?(key) }.each do |key|
-          warn("DEPRECATION WARNING: `#{key}` is a deprecated cache option and will have no effect soon. See https://github.com/fast-jsonapi/fast_jsonapi#caching for more information.")
-        end
-
-        self.cache_store_instance = cache_options[:enabled] ? Rails.cache : nil
-        self.cache_store_options = {
-          expires_in: cache_options[:cache_length] || 5.minutes,
-          race_condition_ttl: cache_options[:race_condition_ttl] || 5.seconds
-        }
       end
 
       def attributes(*attributes_list, &block)
@@ -277,7 +270,7 @@ module FastJsonapi
             options[:serializer],
             block
           ),
-          record_type: options[:record_type],
+          record_type: options[:record_type].presence || name,
           object_method_name: options[:object_method_name] || name,
           object_block: block,
           serializer: options[:serializer],
@@ -288,7 +281,8 @@ module FastJsonapi
           transform_method: @transform_method,
           meta: options[:meta],
           links: options[:links],
-          lazy_load_data: options[:lazy_load_data]
+          lazy_load_data: options[:lazy_load_data],
+          options: @options # maintain context all the way through
         )
       end
 
@@ -321,32 +315,24 @@ module FastJsonapi
         {}
       end
 
-      # def link(link_name, link_method_name = nil, &block)
-      def link(*params, &block)
-        self.data_links = {} if data_links.nil?
+      # def link(params, &block)
+      # params: {}
+      #   :rel - what to name the link.. ie the 'relationship' - required
+      #   :system - a value as defined by the call to: https://se-api.sportsengine.com/v3/originator_systems
+      #   :link_method_name - will be called on the object to resolve the link href -> will result in :href in output
+      #   :type - "GET" or "POST" or "PUT",.. ie http verb. Defaults to 'GET'
+      def link(params, &block)
+        self.data_links = [] if data_links.nil?
+        raise ArgumentError, '`link` parameters must be a hash and must include :rel' unless params.is_a?(Hash) && params[:rel].present?
 
-        options = params.last.is_a?(Hash) ? params.pop : {}
-        link_name = params.first
-        link_method_name = params[-1]
-        key = run_key_transform(link_name)
-
-        data_links[key] = Link.new(
-          key: key,
-          method: block || link_method_name,
-          options: options
+        data_links << Link.new({
+          rel: params[:rel],
+          system: params[:system].presence || '',
+          method: params[:link_method_name].presence || block,
+          type: params[:type].presence || "GET"   }
         )
       end
 
-      def validate_includes!(includes)
-        return if includes.blank?
-
-        parse_includes_list(includes).keys.each do |include_item|
-          relationship_to_include = relationships_to_serialize[include_item]
-          raise(JSONAPI::Serializer::UnsupportedIncludeError.new(include_item, name)) unless relationship_to_include
-
-          relationship_to_include.static_serializer # called for a side-effect to check for a known serializer class.
-        end
-      end
     end
   end
 end

@@ -4,6 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'jsonapi/serializer/version'
 
 Gem::Specification.new do |gem|
+  gem.required_ruby_version = '>= 2.3.5'
   gem.name = 'jsonapi-serializer'
   gem.version = JSONAPI::Serializer::VERSION
 
