@@ -48,7 +48,7 @@ module FastJsonapi
       serializable_hash = {  }
 
       if @resource
-        serializable_hash = self.class.record_hash(@resource, @fieldsets[self.class.record_type.to_sym], nil, @params)
+        serializable_hash = self.class.record_hash(@resource, @fieldsets[self.class.record_type.to_sym], @options, @params)
         serializable_hash[:_meta] = @meta if @meta.present?
         serializable_hash[:_links] = @links if @links.present?
       else
@@ -63,7 +63,7 @@ module FastJsonapi
       data = []
       fieldset = @fieldsets[self.class.record_type.to_sym]
       @resource.each do |record|
-        data << self.class.record_hash(record, fieldset, @includes, @params)
+        data << self.class.record_hash(record, fieldset, @options, @params)
       end
 
       serializable_hash = data

@@ -42,7 +42,7 @@ module FastJsonapi
       @serializers_for_name = {}
     end
 
-    def serialize(record, included, serialization_params, output_hash)
+    def serialize(record, original_options, serialization_params, output_hash)
       if include_relationship?(record, serialization_params)
 
         data = nil
@@ -51,18 +51,18 @@ module FastJsonapi
         initialize_static_serializer unless @initialized_static_serializer
 
         if relationship_type == :has_many
-          if @static_serializer # && @options.dig(:nest_level) < NEST_MAX_LEVEL
+          if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
             data = relevant_objs.each_with_object([]) do |sub_obj, array|
-              array << @static_serializer.new(sub_obj, @options).serializable_hash
+              array << @static_serializer.new(sub_obj, original_options).serializable_hash
             end
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included # && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
           end
         else
-          if @static_serializer # && @options.dig(:nest_level) < NEST_MAX_LEVEL
-            data = @static_serializer.new(relevant_objs, @options).serializable_hash
+          if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
+            data = @static_serializer.new(relevant_objs, original_options).serializable_hash
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && !included # && (@options.dig(:nest_level) < (NEST_MAX_LEVEL +1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
           end
         end
         output_hash[@name] = data

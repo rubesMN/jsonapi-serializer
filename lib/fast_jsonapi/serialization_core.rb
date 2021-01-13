@@ -51,14 +51,13 @@ module FastJsonapi
         end
       end
 
-      def relationships_hash(record, relationships = nil, fieldset = nil, includes_list = nil, params = {})
+      def relationships_hash(record, relationships = nil, fieldset = nil, original_options = {}, params = {})
         relationships = relationships_to_serialize if relationships.nil?
         relationships = relationships.slice(*fieldset) if fieldset.present?
         relationships = {} if fieldset == []
 
         relationships.each_with_object({}) do |(key, relationship), hash|
-          included = includes_list.present? && includes_list.include?(key)
-          relationship.serialize(record, included, params, hash)
+          relationship.serialize(record, original_options, params, hash)
         end
       end
 
@@ -66,20 +65,20 @@ module FastJsonapi
         FastJsonapi.call_proc(meta_to_serialize, record, params)
       end
 
-      def record_hash(record, fieldset, includes_list, params = {})
+      def record_hash(record, fieldset, original_options, params = {})
         if cache_store_instance
-          cache_opts = record_cache_options(cache_store_options, fieldset, includes_list, params)
+          cache_opts = record_cache_options(cache_store_options, fieldset, params)
           record_hash = cache_store_instance.fetch(record, **cache_opts) do
             temp_hash = id_hash(id_from_record(record, params), record_type, true)
             temp_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
-            temp_hash.merge!(relationships_hash(record, cachable_relationships_to_serialize, fieldset, includes_list, params)) if cachable_relationships_to_serialize.present?
+            temp_hash.merge!(relationships_hash(record, cachable_relationships_to_serialize, fieldset, original_options, params)) if cachable_relationships_to_serialize.present?
             temp_hash[:_links] = links_hash(record, params) if data_links.present?
             temp_hash
           end
         else
           record_hash = { id: id_from_record(record, params) }
           record_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
-          record_hash.merge!(relationships_hash(record, nil, fieldset, includes_list, params)) if relationships_to_serialize.present?
+          record_hash.merge!(relationships_hash(record, nil, fieldset, original_options, params)) if relationships_to_serialize.present?
           record_hash[:_links] = links_hash(record, params) if data_links.present?
         end
 
@@ -94,12 +93,11 @@ module FastJsonapi
       #
       # @param options [Hash] default cache options
       # @param fieldset [Array, nil] passed fieldset values
-      # @param includes_list [Array, nil] passed included values
       # @param params [Hash] the serializer params
       #
       # @return [Hash] processed options hash
       # rubocop:disable Lint/UnusedMethodArgument
-      def record_cache_options(options, fieldset, includes_list, params)
+      def record_cache_options(options, fieldset, params)
         return options unless fieldset
 
         options = options ? options.dup : {}
