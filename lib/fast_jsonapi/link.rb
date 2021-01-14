@@ -2,13 +2,13 @@ require 'fast_jsonapi/scalar'
 
 module FastJsonapi
   class Link < Scalar
-    attr_reader :rel, :system, :type
+    attr_reader :rel, :system, :type, :link_method_name
     def initialize(params, options: {})
       @rel = params[:rel]
       @system = params[:system]
       @type = params[:type]
 
-      super(key: :_link, method: params[:method], options: options)
+      super(key: :_link, method: params[:link_method_name], options: options)
     end
 
     def serialize(record, serialization_params, output_array)
@@ -25,7 +25,7 @@ module FastJsonapi
             rel: @rel,
             system: @system.presence || serialization_params[:system_type] || '',
             type: @type,
-            href: "#{serialization_params[:current_request]&.host}#{record.public_send(method)}"
+            href: "#{record.public_send(method)}"
           }
         end
       end

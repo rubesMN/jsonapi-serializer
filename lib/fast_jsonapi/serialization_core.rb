@@ -53,11 +53,18 @@ module FastJsonapi
 
       def relationships_hash(record, relationships = nil, fieldset = nil, original_options = {}, params = {})
         relationships = relationships_to_serialize if relationships.nil?
-        relationships = relationships.slice(*fieldset) if fieldset.present?
+        relationships = trim_relationships_given_fieldset(relationships, fieldset) if fieldset.present?
         relationships = {} if fieldset == []
 
         relationships.each_with_object({}) do |(key, relationship), hash|
           relationship.serialize(record, original_options, params, hash)
+        end
+      end
+
+      # filter out based on either the relationship name, or the key if the user provided one
+      def trim_relationships_given_fieldset(relationships, fieldset)
+        relationships.each_with_object({}) do |(key, relationship), hash|
+          hash[key] = relationship if fieldset.include?(relationship.get_json_field_name)
         end
       end
 

@@ -53,19 +53,19 @@ module FastJsonapi
         if relationship_type == :has_many
           if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
             data = relevant_objs.each_with_object([]) do |sub_obj, array|
-              array << @static_serializer.new(sub_obj, original_options).serializable_hash
+              array << @static_serializer.new(sub_obj, original_options.dup).serializable_hash
             end
           else
             data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
           end
         else
           if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
-            data = @static_serializer.new(relevant_objs, original_options).serializable_hash
+            data = @static_serializer.new(relevant_objs, original_options.dup).serializable_hash
           else
             data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
           end
         end
-        output_hash[@name] = data
+        output_hash[@key] = data
 
       end
     end
@@ -92,6 +92,14 @@ module FastJsonapi
     def static_record_type
       initialize_static_serializer unless @initialized_static_serializer
       @static_record_type
+    end
+
+    def get_json_field_name
+      @key
+    end
+
+    def get_name
+      @name
     end
 
     private

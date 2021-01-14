@@ -317,7 +317,7 @@ module FastJsonapi
       # def link(params, &block)
       # params: {}
       #   :rel - what to name the link.. ie the 'relationship' - required
-      #   :system - a value as defined by the call to: https://se-api.sportsengine.com/v3/originator_systems
+      #   :system - the high level context typically identifying the service you are calling
       #   :link_method_name - will be called on the object to resolve the link href -> will result in :href in output
       #   :type - "GET" or "POST" or "PUT",.. ie http verb. Defaults to 'GET'
       def link(params, &block)
@@ -327,7 +327,7 @@ module FastJsonapi
         data_links << Link.new({
           rel: params[:rel],
           system: params[:system].presence || '',
-          method: params[:link_method_name].presence || block,
+          link_method_name: params[:link_method_name].presence || block,
           type: params[:type].presence || "GET"   }
         )
       end
