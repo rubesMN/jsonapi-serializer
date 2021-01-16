@@ -16,7 +16,7 @@ RSpec.describe JSONAPI::Serializer do
       expect(cache_store.delete(actor, namespace: 'test')).to be(false)
 
       Cached::ActorSerializer.new(
-        [actor, actor], include: ['played_movies', 'played_movies.owner']
+        [actor, actor] # turn into fields, include: ['played_movies', 'played_movies.owner']
       ).serializable_hash
 
       expect(cache_store.delete(actor, namespace: 'test')).to be(true)

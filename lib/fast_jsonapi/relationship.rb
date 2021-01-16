@@ -42,7 +42,7 @@ module FastJsonapi
       @serializers_for_name = {}
     end
 
-    def serialize(record, original_options, serialization_params, output_hash)
+    def serialize(record, original_options, serialization_params, output_hash, fieldset_current_level)
       if include_relationship?(record, serialization_params)
 
         data = nil
@@ -51,23 +51,43 @@ module FastJsonapi
         initialize_static_serializer unless @initialized_static_serializer
 
         if relationship_type == :has_many
-          if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
+          if @static_serializer && ((original_options&.dig(:nest_level) ||0) <= NEST_MAX_LEVEL)
             data = relevant_objs.each_with_object([]) do |sub_obj, array|
-              array << @static_serializer.new(sub_obj, original_options.dup).serializable_hash
+              array << serialize_deep(sub_obj, original_options, fieldset_current_level)
             end
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) <= (NEST_MAX_LEVEL+1))
           end
         else
-          if @static_serializer && ((original_options&.dig(:nest_level) ||0) < NEST_MAX_LEVEL)
-            data = @static_serializer.new(relevant_objs, original_options.dup).serializable_hash
+          if @static_serializer && ((original_options&.dig(:nest_level) ||0) <= NEST_MAX_LEVEL)
+            data = serialize_deep(relevant_objs, original_options, fieldset_current_level)
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) < (NEST_MAX_LEVEL+1))
+            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) <= (NEST_MAX_LEVEL+1))
           end
         end
         output_hash[@key] = data
 
       end
+    end
+
+    def serialize_deep(relevant_obj, original_options, fieldset_current_level)
+      appropriate_field = fieldset_current_level.detect { |f| (f.is_a?(Hash) && f.keys.first == @key) || f==@key } if fieldset_current_level
+      new_original_options = original_options.dup
+      if fieldset_current_level
+        if appropriate_field.nil?
+          new_original_options[:fields] = [] # meaning, we provided a fieldset into the serialization world, but not this relationship
+        elsif appropriate_field.is_a?(Hash) # subfields specified for this key
+          new_original_options[:fields] = appropriate_field[@key] # jump one step down
+        elsif appropriate_field.is_a?(Symbol) # this relationships key is in the fieldset
+          new_original_options.except!(:fields) # removing.. meaning all fields (and sub relationships)
+        else
+          new_original_options[:fields] = [] # emit nothing for the relationship
+        end
+      else
+        new_original_options.except!(:fields) # remove meaning all fields
+      end
+
+      @static_serializer.new(relevant_obj, new_original_options).serializable_hash
     end
 
     def fetch_associated_object(record, params)

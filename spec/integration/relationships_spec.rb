@@ -67,6 +67,7 @@ RSpec.describe JSONAPI::Serializer do
     end
 
     context 'with include' do
+      fix this to adopt field.sub_field.sub_field and unify sparsefields
       let(:params) do
         { include: [:actors] }
       end

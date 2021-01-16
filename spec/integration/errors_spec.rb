@@ -8,18 +8,12 @@ RSpec.describe JSONAPI::Serializer do
     it do
       expect do
         BadMovieSerializerActorSerializer.new(
-          actor, include: ['played_movies']
+          actor
         )
       end.to raise_error(
         NameError, /cannot resolve a serializer class for 'bad'/
       )
     end
 
-    it do
-      expect { ActorSerializer.new(actor, include: ['bad_include']) }
-        .to raise_error(
-          JSONAPI::Serializer::UnsupportedIncludeError, /bad_include is not specified as a relationship/
-        )
-    end
   end
 end

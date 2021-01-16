@@ -10,7 +10,6 @@ module JSONAPI
       # Patch methods to use instrumentation...
       %w[
         serializable_hash
-        get_included_records
         relationships_hash
       ].each do |method_name|
         define_method(method_name) do |*args|

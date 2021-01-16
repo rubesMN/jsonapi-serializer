@@ -52,7 +52,7 @@ article in the `docs` folder for any questions related to methodology.
 
 * Declaration syntax similar to Active Model Serializer
 * Support for `belongs_to`, `has_many` and `has_one`
-* Support for compound documents (included)
+* Support for compound documents
 * Optimized serialization of compound documents
 * Caching
 
@@ -346,19 +346,7 @@ end
 
 ### Compound Document
 
-Support for top-level and nested included associations through `options[:include]`.
-
-```ruby
-options = {}
-options[:meta] = { total: 2 }
-options[:links] = {
-  self: '...',
-  next: '...',
-  prev: '...'
-}
-options[:include] = [:actors, :'actors.agency', :'actors.agency.state']
-MovieSerializer.new(movies, options).serializable_hash.to_json
-```
+Support for top-level and nested associations merely through the inclusion of those within the serializer.
 
 ### Collection Serialization
 
@@ -710,7 +698,7 @@ We currently do not support deserialization, but we recommend to use any of the 
 This gem provides the next features alongside deserialization:
 - Collection meta
 - Error handling
-- Includes and sparse fields
+- Sparse fields and sub-field identification to allow filtering uniformly
 - Filtering and sorting
 - Pagination
 

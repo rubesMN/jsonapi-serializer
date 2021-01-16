@@ -48,7 +48,7 @@ module FastJsonapi
       serializable_hash = {  }
 
       if @resource
-        serializable_hash = self.class.record_hash(@resource, @fieldsets[self.class.record_type.to_sym], @options, @params)
+        serializable_hash = self.class.record_hash(@resource, @fieldsets, @options, @params)
         serializable_hash[:_meta] = @meta if @meta.present?
         serializable_hash[:_links] = @links if @links.present?
       else
@@ -61,9 +61,8 @@ module FastJsonapi
 
     def hash_for_collection
       data = []
-      fieldset = @fieldsets[self.class.record_type.to_sym]
       @resource.each do |record|
-        data << self.class.record_hash(record, fieldset, @options, @params)
+        data << self.class.record_hash(record, @fieldsets, @options, @params)
       end
 
       serializable_hash = data
@@ -93,7 +92,6 @@ module FastJsonapi
         raise ArgumentError, '`params`  passed within options to serializer must be a hash' unless @params.is_a?(Hash)
       end
 
-      #@known_included_objects = Set.new # going away.. far far away
       @meta = @options[:meta]
       @links = @options[:links]
       @is_collection = @options[:is_collection]

@@ -43,6 +43,7 @@ RSpec.describe JSONAPI::Serializer do
     context 'with include and fields' do
       let(:params) do
         {
+          fixthis no more include -> embedded within fields
           include: [:played_movies],
           fields: { movie: [:release_year], actor: [:first_name] }
         }

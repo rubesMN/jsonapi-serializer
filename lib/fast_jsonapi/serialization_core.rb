@@ -57,14 +57,15 @@ module FastJsonapi
         relationships = {} if fieldset == []
 
         relationships.each_with_object({}) do |(key, relationship), hash|
-          relationship.serialize(record, original_options, params, hash)
+          relationship.serialize(record, original_options, params, hash, fieldset)
         end
       end
 
       # filter out based on either the relationship name, or the key if the user provided one
       def trim_relationships_given_fieldset(relationships, fieldset)
+        expanded_fieldset = fieldset.each_with_object([]) {|f,array| f.is_a?(Hash) ? array.concat(f.keys) : array << f}
         relationships.each_with_object({}) do |(key, relationship), hash|
-          hash[key] = relationship if fieldset.include?(relationship.get_json_field_name)
+          hash[key] = relationship if expanded_fieldset.include?(relationship.get_json_field_name)
         end
       end
 
