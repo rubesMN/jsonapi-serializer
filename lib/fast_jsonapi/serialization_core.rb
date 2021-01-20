@@ -21,8 +21,7 @@ module FastJsonapi
                       :record_id,
                       :cache_store_instance,
                       :cache_store_options,
-                      :data_links,
-                      :meta_to_serialize
+                      :data_links
       end
     end
 
@@ -69,10 +68,6 @@ module FastJsonapi
         end
       end
 
-      def meta_hash(record, params = {})
-        FastJsonapi.call_proc(meta_to_serialize, record, params)
-      end
-
       def record_hash(record, fieldset, original_options, params = {})
         if cache_store_instance
           cache_opts = record_cache_options(cache_store_options, fieldset, params)
@@ -90,7 +85,6 @@ module FastJsonapi
           record_hash[:_links] = links_hash(record, params) if data_links.present?
         end
 
-        record_hash[:_meta] = meta_hash(record, params) if meta_to_serialize.present?
         record_hash
       end
 

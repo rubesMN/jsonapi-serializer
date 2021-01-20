@@ -2,7 +2,7 @@ require 'fast_jsonapi/constants'
 module FastJsonapi
   class Relationship
     include Constants
-    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :cached, :polymorphic, :conditional_proc, :transform_method, :links, :meta, :lazy_load_data
+    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :cached, :polymorphic, :conditional_proc, :transform_method, :links, :lazy_load_data
 
     def initialize(
       owner:,
@@ -19,7 +19,6 @@ module FastJsonapi
       conditional_proc:,
       transform_method:,
       links:,
-      meta:,
       lazy_load_data: false
     )
       @owner = owner
@@ -36,7 +35,6 @@ module FastJsonapi
       @conditional_proc = conditional_proc
       @transform_method = transform_method
       @links = links || []
-      @meta = meta || {}
       @lazy_load_data = lazy_load_data
       @record_types_for = {}
       @serializers_for_name = {}
@@ -169,14 +167,6 @@ module FastJsonapi
                                      link.serialize(record, params, array)
                                    end
                                  end
-    end
-
-    def add_meta_hash(record, params, output_hash)
-      output_hash[key][:meta] = if meta.is_a?(Proc)
-                                  FastJsonapi.call_proc(meta, record, params)
-                                else
-                                  meta
-                                end
     end
 
     def run_key_transform(input)

@@ -4,16 +4,15 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'jsonapi/serializer/version'
 
 Gem::Specification.new do |gem|
-  gem.required_ruby_version = '>= 2.3.5'
   gem.name = 'jsonapi-serializer'
   gem.version = JSONAPI::Serializer::VERSION
 
-  gem.authors = ['JSON:API Serializer Community']
+  gem.authors = ['JSON:API Serializer Community, Eric Roubal']
   gem.email = ''
 
-  gem.summary = 'Fast JSON:API serialization library'
+  gem.summary = 'Fast JSON serialization library'
   gem.description = 'Fast, simple and easy to use '\
-    'JSON:API serialization library (also known as fast_jsonapi).'
+    'JSON serialization library that does NOT follow JSON-API official format.'
   gem.homepage = 'https://github.com/jsonapi-serializer/jsonapi-serializer'
   gem.licenses = ['Apache-2.0']
   gem.files = Dir['lib/**/*']

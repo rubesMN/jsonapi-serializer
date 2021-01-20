@@ -53,7 +53,7 @@ class MovieSerializer
     object.year
   end
 
-  link :self, :url
+  link rel: :self, link_method_name: :url
 
   belongs_to :owner, serializer: UserSerializer
 
@@ -66,10 +66,10 @@ class MovieSerializer
 
   has_many(
     :actors,
-    meta: proc { |record, _| { count: record.actors.length } },
     links: {
-      actors_self: :url,
-      related: ->(obj) { obj.url(obj) }
+      rel: :actors_self,
+      link_method_name: :url,
+      href: ->(obj) { obj.url(obj) }
     }
   )
   has_one(

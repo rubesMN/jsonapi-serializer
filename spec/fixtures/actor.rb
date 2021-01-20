@@ -42,7 +42,7 @@ class CamelCaseActorSerializer
   set_type :user_actor
   attributes :first_name
 
-  link :movie_url do |obj|
+  link rel: :movie_url do |obj|
     obj.movie_urls.values[0]
   end
 

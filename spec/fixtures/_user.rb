@@ -22,11 +22,6 @@ class UserSerializer
   set_id :uid
   attributes :first_name, :last_name, :email
 
-  meta do |obj|
-    {
-      email_length: obj.email.size
-    }
-  end
 end
 
 module Cached

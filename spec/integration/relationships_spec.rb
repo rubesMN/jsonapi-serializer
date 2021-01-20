@@ -59,13 +59,6 @@ RSpec.describe JSONAPI::Serializer do
         )
     end
 
-    describe 'has relationship meta' do
-      it do
-        expect(serialized['data']['relationships']['actors'])
-          .to have_meta('count' => movie.actors.length)
-      end
-    end
-
     context 'with include' do
       fix this to adopt field.sub_field.sub_field and unify sparsefields
       let(:params) do

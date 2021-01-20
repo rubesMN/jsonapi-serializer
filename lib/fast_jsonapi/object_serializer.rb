@@ -49,10 +49,8 @@ module FastJsonapi
 
       if @resource
         serializable_hash = self.class.record_hash(@resource, @fieldsets, @options, @params)
-        serializable_hash[:_meta] = @meta if @meta.present?
         serializable_hash[:_links] = @links if @links.present?
       else
-        serializable_hash[:_meta] = @meta if @meta.present?
         serializable_hash[:_links] = @links if @links.present?
       end
 
@@ -66,7 +64,6 @@ module FastJsonapi
       end
 
       serializable_hash = data
-      serializable_hash[:_meta] = @meta if @meta.present?
       serializable_hash[:_links] = @links if @links.present?
       serializable_hash
     end
@@ -92,7 +89,6 @@ module FastJsonapi
         raise ArgumentError, '`params`  passed within options to serializer must be a hash' unless @params.is_a?(Hash)
       end
 
-      @meta = @options[:meta]
       @links = @options[:links]
       @is_collection = @options[:is_collection]
       @params[:system_type] = self.class.system_type if self.class.system_type.present?
@@ -131,7 +127,6 @@ module FastJsonapi
         subclass.cache_store_instance = cache_store_instance
         subclass.cache_store_options = cache_store_options
         subclass.set_type(subclass.reflected_record_type) if subclass.reflected_record_type
-        subclass.meta_to_serialize = meta_to_serialize
         subclass.record_id = record_id
       end
 
@@ -242,10 +237,6 @@ module FastJsonapi
         add_relationship(relationship)
       end
 
-      def meta(meta_name = nil, &block)
-        self.meta_to_serialize = block || meta_name
-      end
-
       def create_relationship(base_key, relationship_type, options, block)
         name = base_key.to_sym
         if relationship_type == :has_many
@@ -277,7 +268,6 @@ module FastJsonapi
           polymorphic: polymorphic,
           conditional_proc: options[:if],
           transform_method: @transform_method,
-          meta: options[:meta],
           links: options[:links],
           lazy_load_data: options[:lazy_load_data]
         )
