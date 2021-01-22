@@ -13,8 +13,6 @@ module FastJsonapi
       class << self
         attr_accessor :attributes_to_serialize,
                       :relationships_to_serialize,
-                      :cachable_relationships_to_serialize,
-                      :uncachable_relationships_to_serialize,
                       :transform_method,
                       :record_type,
                       :system_type,
@@ -50,10 +48,9 @@ module FastJsonapi
         end
       end
 
-      def relationships_hash(record, relationships = nil, fieldset = nil, original_options = {}, params = {})
-        relationships = relationships_to_serialize if relationships.nil?
-        relationships = trim_relationships_given_fieldset(relationships, fieldset) if fieldset.present?
-        relationships = {} if fieldset == []
+      def relationships_hash(record, fieldset = nil, original_options = {}, params = {})
+        relationships = relationships_to_serialize
+        relationships = trim_relationships_given_fieldset(relationships, fieldset)
 
         relationships.each_with_object({}) do |(key, relationship), hash|
           relationship.serialize(record, original_options, params, hash, fieldset)
@@ -62,6 +59,8 @@ module FastJsonapi
 
       # filter out based on either the relationship name, or the key if the user provided one
       def trim_relationships_given_fieldset(relationships, fieldset)
+        return relationships if fieldset.nil? # making this super clear,.. if nothing sent in, emit everything
+        return {} if fieldset == [] # empty array fieldset means emit nothing
         expanded_fieldset = fieldset.each_with_object([]) {|f,array| f.is_a?(Hash) ? array.concat(f.keys) : array << f}
         relationships.each_with_object({}) do |(key, relationship), hash|
           hash[key] = relationship if expanded_fieldset.include?(relationship.get_json_field_name)
@@ -71,21 +70,25 @@ module FastJsonapi
       def record_hash(record, fieldset, original_options, params = {})
         if cache_store_instance
           cache_opts = record_cache_options(cache_store_options, fieldset, params)
-          record_hash = cache_store_instance.fetch(record, **cache_opts) do
-            temp_hash = id_hash(id_from_record(record, params), record_type, true)
+          record_hash = cache_store_instance.fetch(record_cache_key(record, params), **cache_opts) do
+            temp_hash = { id: id_from_record(record, params) }
             temp_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
-            temp_hash.merge!(relationships_hash(record, cachable_relationships_to_serialize, fieldset, original_options, params)) if cachable_relationships_to_serialize.present?
+            temp_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
             temp_hash[:_links] = links_hash(record, params) if data_links.present?
             temp_hash
           end
         else
           record_hash = { id: id_from_record(record, params) }
           record_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
-          record_hash.merge!(relationships_hash(record, nil, fieldset, original_options, params)) if relationships_to_serialize.present?
+          record_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
           record_hash[:_links] = links_hash(record, params) if data_links.present?
         end
 
         record_hash
+      end
+
+      def record_cache_key(record, params)
+        "#{self.name}:#{id_from_record(record, params)}"
       end
 
       # Cache options helper. Use it to adapt cache keys/rules.
@@ -105,7 +108,7 @@ module FastJsonapi
         options = options ? options.dup : {}
         options[:namespace] ||= 'jsonapi-serializer'
 
-        fieldset_key = fieldset.join('_')
+        fieldset_key = fieldset.empty? ? '' : fieldset.to_s
 
         # Use a fixed-length fieldset key if the current length is more than
         # the length of a SHA1 digest

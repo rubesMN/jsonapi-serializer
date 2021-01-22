@@ -2,7 +2,7 @@ require 'fast_jsonapi/constants'
 module FastJsonapi
   class Relationship
     include Constants
-    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :cached, :polymorphic, :conditional_proc, :transform_method, :links, :lazy_load_data
+    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :polymorphic, :conditional_proc, :transform_method, :lazy_load_data
 
     def initialize(
       owner:,
@@ -14,11 +14,9 @@ module FastJsonapi
       object_block:,
       serializer:,
       relationship_type:,
-      cached: false,
       polymorphic:,
       conditional_proc:,
       transform_method:,
-      links:,
       lazy_load_data: false
     )
       @owner = owner
@@ -30,11 +28,9 @@ module FastJsonapi
       @object_block = object_block
       @serializer = serializer
       @relationship_type = relationship_type
-      @cached = cached
       @polymorphic = polymorphic
       @conditional_proc = conditional_proc
       @transform_method = transform_method
-      @links = links || []
       @lazy_load_data = lazy_load_data
       @record_types_for = {}
       @serializers_for_name = {}
@@ -43,24 +39,26 @@ module FastJsonapi
     def serialize(record, original_options, serialization_params, output_hash, fieldset_current_level)
       if include_relationship?(record, serialization_params)
 
-        data = nil
+        data = relationship_type == :has_many ? [] : nil
         relevant_objs = fetch_associated_object(record, serialization_params)
 
-        initialize_static_serializer unless @initialized_static_serializer
+        if relevant_objs.present?
+          initialize_static_serializer unless @initialized_static_serializer
 
-        if relationship_type == :has_many
-          if @static_serializer && ((original_options&.dig(:nest_level) ||0) <= NEST_MAX_LEVEL)
-            data = relevant_objs.each_with_object([]) do |sub_obj, array|
-              array << serialize_deep(sub_obj, original_options, fieldset_current_level)
+          if relationship_type == :has_many
+            if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+              data = relevant_objs.each_with_object([]) do |sub_obj, array|
+                array << serialize_deep(sub_obj, original_options, fieldset_current_level)
+              end
+            else
+              data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
             end
           else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) <= (NEST_MAX_LEVEL+1))
-          end
-        else
-          if @static_serializer && ((original_options&.dig(:nest_level) ||0) <= NEST_MAX_LEVEL)
-            data = serialize_deep(relevant_objs, original_options, fieldset_current_level)
-          else
-            data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) ||0) <= (NEST_MAX_LEVEL+1))
+            if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+              data = serialize_deep(relevant_objs, original_options, fieldset_current_level)
+            else
+              data = ids_hash_from_record_and_relationship(relevant_objs, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
+            end
           end
         end
         output_hash[@key] = data
@@ -92,6 +90,8 @@ module FastJsonapi
       return FastJsonapi.call_proc(object_block, record, params) unless object_block.nil?
 
       record.send(object_method_name)
+    # rescue StandardError
+    #   return nil  # tollerate mistakes by not outputting
     end
 
     def include_relationship?(record, serialization_params)
@@ -138,7 +138,7 @@ module FastJsonapi
 
     def id_hash(id, record_type, params, default_return = false)
       if id.present?
-        { id: id.to_s, _links: trivial_link_hash(id, record_type, params) }
+        { id: id.to_s, _links: trivial_link_hash(id, record_type, params) } # optimized for large data sets
       else
         default_return ? { id: nil } : nil
       end
@@ -156,17 +156,8 @@ module FastJsonapi
         return object.try(id_method_name)
       end
       record.public_send(id_method_name)
-    end
-
-    def add_links_hash(record, params, output_hash)
-      output_hash[key][:_links] = if links.is_a?(Symbol)
-                                   record.public_send(links)
-                                 else
-                                   links.each_with_object([]) do |link, array|
-                                     # Link.new(key: key, method: method).serialize(record, params, hash)
-                                     link.serialize(record, params, array)
-                                   end
-                                 end
+    # rescue StandardError
+    #   nil # tollerate mistakes and output nothing
     end
 
     def run_key_transform(input)

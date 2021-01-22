@@ -49,9 +49,6 @@ module FastJsonapi
 
       if @resource
         serializable_hash = self.class.record_hash(@resource, @fieldsets, @options, @params)
-        serializable_hash[:_links] = @links if @links.present?
-      else
-        serializable_hash[:_links] = @links if @links.present?
       end
 
       serializable_hash
@@ -64,14 +61,13 @@ module FastJsonapi
       end
 
       serializable_hash = data
-      serializable_hash[:_links] = @links if @links.present?
       serializable_hash
     end
 
     private
 
     def process_options(options)
-      @fieldsets = deep_symbolize(options&.dig(:fields) || {})
+      @fieldsets = deep_symbolize(options&.dig(:fields))
       @params = {}
 
       if options.blank? || options.empty?
@@ -89,12 +85,12 @@ module FastJsonapi
         raise ArgumentError, '`params`  passed within options to serializer must be a hash' unless @params.is_a?(Hash)
       end
 
-      @links = @options[:links]
       @is_collection = @options[:is_collection]
       @params[:system_type] = self.class.system_type if self.class.system_type.present?
     end
 
     def deep_symbolize(collection)
+      return nil unless collection
       if collection.is_a? Hash
         collection.each_with_object({}) do |(k, v), hsh|
           hsh[k.to_sym] = deep_symbolize(v)
@@ -120,8 +116,6 @@ module FastJsonapi
         super(subclass)
         subclass.attributes_to_serialize = attributes_to_serialize.dup if attributes_to_serialize.present?
         subclass.relationships_to_serialize = relationships_to_serialize.dup if relationships_to_serialize.present?
-        subclass.cachable_relationships_to_serialize = cachable_relationships_to_serialize.dup if cachable_relationships_to_serialize.present?
-        subclass.uncachable_relationships_to_serialize = uncachable_relationships_to_serialize.dup if uncachable_relationships_to_serialize.present?
         subclass.transform_method = transform_method
         subclass.data_links = data_links.dup if data_links.present?
         subclass.cache_store_instance = cache_store_instance
@@ -169,7 +163,15 @@ module FastJsonapi
 
       def add_self_link
         link rel: :self do |obj|
-          "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
+          # todo: yes.. not good.. but this is the only Rails dependency we have and setting up an entire
+          #       dummy application for one line to work can be done later
+          #       when other rails dependencies creep in, remove if and configure spec_helper to include rspec/rails
+          if ENV['RAILS_ENV'].nil? || ENV['RAILS_ENV']!='test'
+            "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
+          else
+            "Rails.application.routes.url_helpers.url_for([obj, only_path: true])"
+          end
+
         end
       end
 
@@ -209,16 +211,7 @@ module FastJsonapi
 
       def add_relationship(relationship)
         self.relationships_to_serialize = {} if relationships_to_serialize.nil?
-        self.cachable_relationships_to_serialize = {} if cachable_relationships_to_serialize.nil?
-        self.uncachable_relationships_to_serialize = {} if uncachable_relationships_to_serialize.nil?
 
-        # TODO: Remove this undocumented option.
-        #   Delegate the caching to the serializer exclusively.
-        if !relationship.cached
-          uncachable_relationships_to_serialize[relationship.name] = relationship
-        else
-          cachable_relationships_to_serialize[relationship.name] = relationship
-        end
         relationships_to_serialize[relationship.name] = relationship
       end
 
@@ -264,11 +257,9 @@ module FastJsonapi
           object_block: block,
           serializer: options[:serializer],
           relationship_type: relationship_type,
-          cached: options[:cached],
           polymorphic: polymorphic,
           conditional_proc: options[:if],
           transform_method: @transform_method,
-          links: options[:links],
           lazy_load_data: options[:lazy_load_data]
         )
       end
@@ -313,7 +304,7 @@ module FastJsonapi
         raise ArgumentError, '`link` parameters must be a hash and must include :rel' unless params.is_a?(Hash) && params[:rel].present?
 
         data_links << Link.new({
-          rel: params[:rel],
+          rel: run_key_transform(params[:rel]),
           system: params[:system].presence || '',
           link_method_name: params[:link_method_name].presence || block,
           type: params[:type].presence || "GET"   }

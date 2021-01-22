@@ -10,7 +10,7 @@ RSpec.describe JSONAPI::Serializer do
         BadMovieSerializerActorSerializer.new(
           actor
         )
-      end.to raise_error(
+      end.to_not raise_error(
         NameError, /cannot resolve a serializer class for 'bad'/
       )
     end

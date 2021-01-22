@@ -276,73 +276,6 @@ class MovieSerializer
 end
 ```
 
-#### Links on a Relationship
-
-You can specify [relationship links](https://jsonapi.org/format/#document-resource-object-relationships) by using the `links:` option on the serializer. Relationship links in JSON API are useful if you want to load a parent document and then load associated documents later due to size constraints (see [related resource links](https://jsonapi.org/format/#document-resource-object-related-resource-links))
-
-```ruby
-class MovieSerializer
-  include JSONAPI::Serializer
-
-  has_many :actors, links: {
-    self: :url,
-    related: -> (object) {
-      "https://movies.com/#{object.id}/actors"
-    }
-  }
-end
-```
-
-Relationship links can also be configured to be defined as a method on the object.
-
-```ruby
-  has_many :actors, links: :actor_relationship_links
-```
-
-This will create a `self` reference for the relationship, and a `related` link for loading the actors relationship later. NB: This will not automatically disable loading the data in the relationship, you'll need to do that using the `lazy_load_data` option:
-
-```ruby
-  has_many :actors, lazy_load_data: true, links: {
-    self: :url,
-    related: -> (object) {
-      "https://movies.com/#{object.id}/actors"
-    }
-  }
-```
-
-### Meta Per Resource
-
-For every resource in the collection, you can include a meta object containing non-standard meta-information about a resource that can not be represented as an attribute or relationship.
-
-
-```ruby
-class MovieSerializer
-  include JSONAPI::Serializer
-
-  meta do |movie|
-    {
-      years_since_release: Date.current.year - movie.year
-    }
-  end
-end
-```
-
-#### Meta on a Relationship
-
-You can specify [relationship meta](https://jsonapi.org/format/#document-resource-object-relationships) by using the `meta:` option on the serializer. Relationship meta in JSON API is useful if you wish to provide non-standard meta-information about the relationship.
-
-Meta can be defined either by passing a static hash or by using Proc to the `meta` key. In the latter case, the record and any params passed to the serializer are available inside the Proc as the first and second parameters, respectively.
-
-
-```ruby
-class MovieSerializer
-  include JSONAPI::Serializer
-
-  has_many :actors, meta: Proc.new do |movie_record, params|
-    { count: movie_record.actors.length }
-  end
-end
-```
 
 ### Compound Document
 
@@ -351,12 +284,6 @@ Support for top-level and nested associations merely through the inclusion of th
 ### Collection Serialization
 
 ```ruby
-options[:meta] = { total: 2 }
-options[:links] = {
-  self: '...',
-  next: '...',
-  prev: '...'
-}
 hash = MovieSerializer.new(movies, options).serializable_hash
 json_string = MovieSerializer.new(movies, options).serializable_hash.to_json
 ```

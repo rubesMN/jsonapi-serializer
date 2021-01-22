@@ -65,12 +65,7 @@ class MovieSerializer
              }
 
   has_many(
-    :actors,
-    links: {
-      rel: :actors_self,
-      link_method_name: :url,
-      href: ->(obj) { obj.url(obj) }
-    }
+    :actors
   )
   has_one(
     :creator,
@@ -115,10 +110,7 @@ module Cached
     has_one(
       :creator,
       id_method_name: :uid,
-      serializer: :actor,
-      # TODO: Remove this undocumented option.
-      #   Delegate the caching to the serializer exclusively.
-      cached: false
+      serializer: :user
     ) do |obj|
       obj.owner
     end

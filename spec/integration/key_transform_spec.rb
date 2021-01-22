@@ -9,11 +9,10 @@ RSpec.describe JSONAPI::Serializer do
 
   describe 'camel case key tranformation' do
     it do
-      expect(serialized['data']).to have_id(actor.uid)
-      expect(serialized['data']).to have_type('UserActor')
-      expect(serialized['data']).to have_attribute('FirstName')
-      expect(serialized['data']).to have_relationship('PlayedMovies')
-      expect(serialized['data']).to have_link('MovieUrl').with_value(nil)
+      expect(serialized['id']).to eq(actor.uid)
+      expect(serialized.keys).to include('FirstName', 'PlayedMovies')
+
+      expect(serialized['_links'].map {|lnk| lnk['rel']}).to match_array(['self', 'MovieUrl'])
     end
   end
 end

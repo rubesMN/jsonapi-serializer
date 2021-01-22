@@ -12,36 +12,18 @@ RSpec.describe JSONAPI::Serializer do
   end
 
   describe 'links' do
-    it do
-      expect(serialized['data']).to have_link('self').with_value(movie.url)
-      expect(serialized['data']['relationships']['actors'])
-        .to have_link('actors_self').with_value(movie.url)
-      expect(serialized['data']['relationships']['actors'])
-        .to have_link('related').with_value(movie.url(movie))
+    it 'works' do
+      expect(serialized['_links'].map {|lnk| lnk['rel']}).to include('self')
+      expect(serialized['_links'].map {|lnk| lnk['href']}).to match_array(["Rails.application.routes.url_helpers.url_for([obj, only_path: true])", movie.url])
+      expect(serialized['actors'].reduce([]) do |array, actr|
+         array.concat(actr['_links'].map{|lnk| lnk['rel']})
+      end).to match_array(['self', 'bio', 'hair_salon_discount'])
+      expect(serialized['actors'].reduce([]) do |array, actr|
+             array.concat(actr['_links'].map{|lnk| lnk['href']})
+      end).to match_array(["Rails.application.routes.url_helpers.url_for([obj, only_path: true])",
+                                "https://www.imdb.com/name/nm0000098/",
+                                "www.somesalon.com/#{movie.actors.first.uid}"])
     end
 
-    context 'with included records' do
-      let(:serialized) do
-        ActorSerializer.new(movie.actors[0]).serializable_hash.as_json
-      end
-
-      it do
-        expect(serialized['data']['relationships']['played_movies'])
-          .to have_link('movie_url').with_value(movie.url)
-      end
-    end
-
-    context 'with root link' do
-      let(:params) do
-        {
-          links: { 'root_link' => FFaker::Internet.http_url }
-        }
-      end
-
-      it do
-        expect(serialized)
-          .to have_link('root_link').with_value(params[:links]['root_link'])
-      end
-    end
   end
 end

@@ -16,6 +16,9 @@ class Actor < User
       movie_url: movies[0]&.url
     }
   end
+  def bio_link
+    "https://www.imdb.com/name/nm0000098/"
+  end
 end
 
 class ActorSerializer < UserSerializer
@@ -26,10 +29,14 @@ class ActorSerializer < UserSerializer
   has_many(
     :played_movies,
     serializer: :movie,
-    links: :movie_urls,
     if: ->(_object, params) { params[:conditionals_off].nil? }
   ) do |object|
     object.movies
+  end
+
+  link rel: :bio, system: :IMDB, link_method_name: :bio_link
+  link rel: :hair_salon_discount do |obj|
+    "www.somesalon.com/#{obj.uid}"
   end
 end
 
@@ -62,6 +69,8 @@ module Cached
   class ActorSerializer < ::ActorSerializer
     # TODO: Fix this, the serializer gets cached on inherited classes...
     has_many :played_movies, serializer: :movie do |object|
+      # this ill-advised block gets the actual movies array itself and you could make mistakes obviously
+      # Its better to use relationship_name of :movies and identify the key as :played_movies and avoid this block
       object.movies
     end
 

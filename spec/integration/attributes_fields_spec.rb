@@ -8,34 +8,31 @@ RSpec.describe JSONAPI::Serializer do
   end
   let(:params) { {} }
   let(:serialized) do
-    ActorSerializer.new(actor, params).serializable_hash.as_json
+    ActorSerializer.new(actor, params).serializable_hash
   end
 
   describe 'attributes' do
     it do
-      expect(serialized).to have_id(actor.uid)
+      expect(serialized[:id]).to eq(actor.uid)
 
-      expect(serialized)
-        .to have_jsonapi_attributes('first_name', 'last_name', 'email').exactly
-      expect(serialized).to have_attribute('first_name')
-        .with_value(actor.first_name)
-      expect(serialized).to have_attribute('last_name')
-        .with_value(actor.last_name)
-      expect(serialized).to have_attribute('email')
-        .with_value(actor.email)
+      expect(serialized.keys).to match_array([:first_name, :last_name, :email, :id, :played_movies, :_links])
+      expect(serialized[:first_name]).to eq(actor.first_name)
+      expect(serialized[:last_name]).to eq(actor.last_name)
+      expect(serialized[:email]).to eq(actor.email)
+
     end
 
     context 'with nil identifier' do
       before { actor.uid = nil }
 
-      it { expect(serialized).to have_id(nil) }
+      it { expect(serialized[:id]).to eq(nil) }
     end
 
     context 'with `if` conditions' do
       let(:params) { { params: { conditionals_off: 'yes' } } }
 
       it do
-        expect(serialized).not_to have_attribute('email')
+        expect(serialized[:email]).to be_nil
       end
     end
 
@@ -47,13 +44,14 @@ RSpec.describe JSONAPI::Serializer do
       end
 
       it do
-        expect(serialized)
-          .to have_jsonapi_attributes(:first_name).exactly
+        expect(serialized.keys)
+          .to match_array([:first_name, :played_movies, :id, :_links])
+        expect(serialized[:first_name]).to eq(actor.first_name)
 
-        expect(serialized['played_movies']).to include(
-                                                 have_id(actor.movies[0].id)
-                                                 .and(have_jsonapi_attributes('release_year').exactly)
-                                               )
+        expect(serialized[:played_movies][0].keys).to match_array([:id, :release_year, :_links])
+
+        expect(serialized[:played_movies].size).to be(1)
+        expect(serialized[:played_movies][0][:release_year]).to eq(actor.movies[0].year)
 
       end
     end
