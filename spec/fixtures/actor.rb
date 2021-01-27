@@ -19,6 +19,12 @@ class Actor < User
   def bio_link
     "https://www.imdb.com/name/nm0000098/"
   end
+  def favorite_movie
+    movies.present? ? movies[0] : nil
+  end
+  def favorite_movie_id
+    movies.present? ? movies[0]&.id : nil
+  end
 end
 
 class ActorSerializer < UserSerializer
@@ -33,6 +39,9 @@ class ActorSerializer < UserSerializer
   ) do |object|
     object.movies
   end
+
+  has_one :favorite_movie,
+          serializer: :movie
 
   link rel: :bio, system: :IMDB, link_method_name: :bio_link
   link rel: :hair_salon_discount do |obj|

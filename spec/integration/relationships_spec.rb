@@ -22,11 +22,11 @@ RSpec.describe JSONAPI::Serializer do
       expect(serialized.keys).to eq(%w[id name release_year owner actor_or_user actors creator actors_and_users non_polymorphic_actors_and_users _links])
 
       expect(serialized['actors'].size).to be_between(2,5)
-      expect(serialized['actors'][0].keys).to match_array(%w[id first_name last_name email played_movies _links])
+      expect(serialized['actors'][0].keys).to match_array(%w[id first_name last_name email played_movies favorite_movie _links])
 
       # prove we nest level 1 deep
       expect(serialized['actors'][0].each_with_object([]) do |(k, v), arry|
-        arry << v unless k=='played_movies' || k=='_links'
+        arry << v unless k=='played_movies' || k=='_links' || k=='favorite_movie'
       end).to match_array([movie.actors[0].uid, movie.actors[0].first_name, movie.actors[0].last_name, movie.actors[0].email])
 
       # prove we nest level 2 deep
@@ -59,6 +59,14 @@ RSpec.describe JSONAPI::Serializer do
       expect(serialized['actors'][0]['played_movies'][0]['actors'][0]['played_movies'][0].each_with_object([]) do |(k, v), arry|
         arry << v if !v.nil? && v.is_a?(String)
       end).to match_array([movie.actors[0].movies[0].actors[0].movies[0].id])
+
+      # prove we nest level 4 deep with :has_one but only id, _links
+      expect(serialized['actors'][0]['played_movies'][0]['actors'][0]['favorite_movie'].each_with_object([]) do |(k, v), arry|
+        arry << k
+      end).to match_array(['id','_links'])
+      expect(serialized['actors'][0]['played_movies'][0]['actors'][0]['favorite_movie'].each_with_object([]) do |(k, v), arry|
+        arry << v if !v.nil? && v.is_a?(String)
+      end).to match_array([movie.actors[0].movies[0].actors[0].favorite_movie.id])
 
       # belongs_to test to ensure defined serializer works
       expect(serialized['owner'].keys).to match_array(%w(id first_name last_name email _links))
