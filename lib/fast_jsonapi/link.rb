@@ -39,5 +39,14 @@ module FastJsonapi
         href: "/#{record_type.to_s.pluralize}/#{id}"
       }]
     end
+
+    def self.serialize_rails_route_self(record, record_type, serialization_params)
+      return [{
+                rel: :self,
+                system: record_type,
+                type: "GET",
+                href: (ENV['RAILS_ENV'].nil? || ENV['RAILS_ENV']!='test') ? "#{Rails.application.routes.url_helpers.url_for([record, only_path: true])}" : "Rails.application.routes.url_helpers.url_for([obj, only_path: true])"
+              }]
+    end
   end
 end

@@ -1,5 +1,5 @@
 module FastJsonapi
   module Constants
-    NEST_MAX_LEVEL = 4
+    NEST_MAX_LEVEL = 3
   end
 end

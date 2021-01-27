@@ -24,13 +24,6 @@ module FastJsonapi
     end
 
     class_methods do
-      def id_hash(id, record_type, default_return = false)
-        if id.present?
-          { id: id.to_s, type: record_type }
-        else
-          default_return ? { id: nil, type: record_type } : nil
-        end
-      end
 
       def links_hash(record, params = {})
         data_links.each_with_object([]) do |link, array|
@@ -74,14 +67,14 @@ module FastJsonapi
             temp_hash = { id: id_from_record(record, params) }
             temp_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
             temp_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
-            temp_hash[:_links] = links_hash(record, params) if data_links.present?
+            temp_hash[:_links] = links_hash(record, params) if data_links.present? && original_options[:no_links].blank?
             temp_hash
           end
         else
           record_hash = { id: id_from_record(record, params) }
           record_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
           record_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
-          record_hash[:_links] = links_hash(record, params) if data_links.present?
+          record_hash[:_links] = links_hash(record, params) if data_links.present? && original_options[:no_links].blank?
         end
 
         record_hash

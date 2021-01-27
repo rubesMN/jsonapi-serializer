@@ -245,30 +245,23 @@ module FastJsonapi
           owner: self,
           key: options[:key] || run_key_transform(base_key),
           name: name,
-          id_method_name: compute_id_method_name(
-            options[:id_method_name],
-            "#{base_serialization_key}#{id_postfix}".to_sym,
-            polymorphic,
-            options[:serializer],
-            block
-          ),
-          record_type: options[:record_type].presence || name,
+          id_method_name: options[:id_method_name] || :id,
+          record_type: options[:record_type],
           object_method_name: options[:object_method_name] || name,
           object_block: block,
           serializer: options[:serializer],
           relationship_type: relationship_type,
           polymorphic: polymorphic,
           conditional_proc: options[:if],
-          transform_method: @transform_method,
-          lazy_load_data: options[:lazy_load_data]
+          transform_method: @transform_method
         )
       end
 
-      def compute_id_method_name(custom_id_method_name, id_method_name_from_relationship, polymorphic, serializer, block)
-        if block.present? || serializer.is_a?(Proc) || polymorphic
-          custom_id_method_name || :id
+      def compute_id_method_name(options, id_method_name_from_relationship, polymorphic, block)
+        if block.present? || options[:serializer]&.is_a?(Proc) || polymorphic
+          options[:id_method_name] || :id
         else
-          custom_id_method_name || id_method_name_from_relationship
+          options[:id_method_name] || id_method_name_from_relationship
         end
       end
 
@@ -303,12 +296,32 @@ module FastJsonapi
         self.data_links = [] if data_links.nil?
         raise ArgumentError, '`link` parameters must be a hash and must include :rel' unless params.is_a?(Hash) && params[:rel].present?
 
-        data_links << Link.new({
-          rel: run_key_transform(params[:rel]),
-          system: params[:system].presence || '',
-          link_method_name: params[:link_method_name].presence || block,
-          type: params[:type].presence || "GET"   }
-        )
+        already_has_self = data_links.find {|dl| dl.rel == :self}
+        if params[:rel] == :self && already_has_self
+          # ensure only one self.. replace with this one assuming user knows better
+          dl_index = 0
+          replaced = false
+          while dl_index < data_links.size && !replaced
+            if data_links[dl_index].rel == :self
+              replaced = true
+              data_links[dl_index] = Link.new({
+                                                rel: run_key_transform(params[:rel]),
+                                                system: params[:system].presence || '',
+                                                link_method_name: params[:link_method_name].presence || block,
+                                                type: params[:type].presence || "GET"   }
+              )
+            else
+              dl_index += 1
+            end
+          end
+        else
+          data_links << Link.new({
+                                   rel: run_key_transform(params[:rel]),
+                                   system: params[:system].presence || '',
+                                   link_method_name: params[:link_method_name].presence || block,
+                                   type: params[:type].presence || "GET"   }
+          )
+        end
       end
 
     end

@@ -2,7 +2,7 @@ require 'fast_jsonapi/constants'
 module FastJsonapi
   class Relationship
     include Constants
-    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :polymorphic, :conditional_proc, :transform_method, :lazy_load_data
+    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :polymorphic, :conditional_proc, :transform_method
 
     def initialize(
       owner:,
@@ -16,8 +16,7 @@ module FastJsonapi
       relationship_type:,
       polymorphic:,
       conditional_proc:,
-      transform_method:,
-      lazy_load_data: false
+      transform_method:
     )
       @owner = owner
       @key = key
@@ -31,7 +30,6 @@ module FastJsonapi
       @polymorphic = polymorphic
       @conditional_proc = conditional_proc
       @transform_method = transform_method
-      @lazy_load_data = lazy_load_data
       @record_types_for = {}
       @serializers_for_name = {}
     end
@@ -40,33 +38,42 @@ module FastJsonapi
       if include_relationship?(record, serialization_params)
 
         data = relationship_type == :has_many ? [] : nil
-        relevant_objs = fetch_associated_object(record, serialization_params)
 
-        if relevant_objs.present?
-          initialize_static_serializer unless @initialized_static_serializer
+        initialize_static_serializer unless @initialized_static_serializer
 
-          if relationship_type == :has_many
-            if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+        if relationship_type == :has_many
+          if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+            relevant_objs = fetch_associated_object(record, serialization_params)
+            if relevant_objs.present?
               data = relevant_objs.each_with_object([]) do |sub_obj, array|
-                array << serialize_deep(sub_obj, original_options, fieldset_current_level)
+                array << serialize_deep(sub_obj, original_options, fieldset_current_level, @static_serializer)
               end
-            else
-              data = ids_hash_from_record_and_relationship(record, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
             end
           else
-            if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
-              data = serialize_deep(relevant_objs, original_options, fieldset_current_level)
-            else
-              data = ids_hash_from_record_and_relationship(relevant_objs, serialization_params) || empty_case unless lazy_load_data && ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
+            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params)  if ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
+          end
+        else
+          if ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+            relevant_obj = fetch_associated_object(record, serialization_params)
+            if relevant_obj.present?
+              serializer_to_use = (@serializer && @serializer.is_a?(Proc)) ? FastJsonapi.call_proc(@serializer, relevant_obj, serialization_params) :  @static_serializer
+              if serializer_to_use
+                data = serialize_deep(relevant_obj, original_options, fieldset_current_level, serializer_to_use)
+              else
+                data = ids_hash_from_record_and_relationship(record, original_options, serialization_params)
+              end
             end
+          else
+            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params) if ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
           end
         end
+
         output_hash[@key] = data
 
       end
     end
 
-    def serialize_deep(relevant_obj, original_options, fieldset_current_level)
+    def serialize_deep(relevant_obj, original_options, fieldset_current_level, serializer_to_use)
       appropriate_field = fieldset_current_level.detect { |f| (f.is_a?(Hash) && f.keys.first == @key) || f==@key } if fieldset_current_level
       new_original_options = original_options.dup
       if fieldset_current_level
@@ -83,7 +90,7 @@ module FastJsonapi
         new_original_options.except!(:fields) # remove meaning all fields
       end
 
-      @static_serializer.new(relevant_obj, new_original_options).serializable_hash
+      serializer_to_use.new(relevant_obj, new_original_options).serializable_hash
     end
 
     def fetch_associated_object(record, params)
@@ -122,25 +129,81 @@ module FastJsonapi
 
     private
 
-    def ids_hash_from_record_and_relationship(record, params = {})
-      initialize_static_serializer unless @initialized_static_serializer
+    def ids_hash_from_record_and_relationship(record, original_options, params = {})
+      if @id_method_name != :id || @polymorphic
+        # do things a bit more inefficiently.. notice fetch of obj(s)
+        relevant_objs = fetch_associated_object(record, params)
+        return nil if relevant_objs.nil?
+        if !@polymorphic
+          if @relationship_type == :has_many
+            associated_obj_type_to_use = relevant_objs.first&.class&.name&.split('::')&.last # bring in first only and use its classname
+          else
+            associated_obj_type_to_use = relevant_objs.class&.name&.split('::')&.last
+          end
+          if object_block.present? && @relationship_type == :has_many
+            # we have an array in relevant_objs.. call id_method on each of array and make IDs hash(s)
+            return ids_hash(fetch_id(record, @id_method_name, params), associated_obj_type_to_use, original_options, params)
+          else
+            return ids_hash(fetch_id(relevant_objs, @id_method_name, params), associated_obj_type_to_use, original_options, params)
+          end
+        else
+          # whoa.. really getting contorted what you're doing.  go very inefficient
+          if @relationship_type == :has_many
+            return relevant_objs.each_with_object([]) do |sub_obj, array|
+              array << id_hash(sub_obj.public_send(@id_method_name), sub_obj.class&.name&.split('::')&.last, original_options, params, sub_obj)
+            end
+          else
+            return id_hash(relevant_objs.public_send(@id_method_name), relevant_objs.class&.name&.split('::')&.last, original_options, params, relevant_objs)
+          end
+        end
 
-      return ids_hash(fetch_id(record, params), @static_record_type, params) # if @static_record_type
-
-    end
-
-
-    def ids_hash(ids, record_type, params)
-      return ids.map { |id| id_hash(id, record_type, params) } if ids.respond_to? :map
-
-      id_hash(ids, record_type, params) # ids variable is just a single id here
-    end
-
-    def id_hash(id, record_type, params, default_return = false)
-      if id.present?
-        { id: id.to_s, _links: trivial_link_hash(id, record_type, params) } # optimized for large data sets
       else
-        default_return ? { id: nil } : nil
+        # efficient SQL to get IDs
+        #
+        if object_block.present? # are we just getting the object(s) from the block from parent.. now back to inefficient
+          id_method_name_to_use = @id_method_name.presence || :id
+        else # nope.. still on track for efficiency
+          if @relationship_type == :has_many
+            base_obj_key = @name.to_s.singularize
+            id_postfix = '_ids'
+          else
+            base_obj_key = @name
+            id_postfix = '_id'
+          end
+          id_method_name_to_use = "#{base_obj_key}#{id_postfix}".to_sym
+        end
+
+        associated_obj_type_to_use = @record_type ? @record_type : (@static_record_type ? @static_record_type : @name)
+        return ids_hash(fetch_id(record, id_method_name_to_use, params), associated_obj_type_to_use, original_options, params)
+      end
+
+
+    end
+
+
+    def ids_hash(ids, record_type, original_options, params)
+      return ids.map { |id| id_hash(id, record_type, original_options, params) } if ids.respond_to? :map
+
+      id_hash(ids, record_type, original_options, params) # ids variable is just a single id here
+    end
+
+    def id_hash(id, record_type, original_options, params, actual_record = nil)
+      if id.present?
+        if record_type
+          if actual_record # use active support and get the link right.  ignoring no_links on purpose
+            { id: id.to_s, type: record_type, _links: fully_accurate_link_hash(actual_record, record_type, params) }
+          else
+            if original_options[:no_links].blank?
+              { id: id.to_s, _links: trivial_link_hash(id, record_type, params) }
+            else
+              { id: id.to_s }
+            end
+          end
+        else
+          { id: id.to_s }
+        end
+      else
+        { id: nil }
       end
     end
 
@@ -148,16 +211,20 @@ module FastJsonapi
       Link.serialize_rails_simple_self(id, record_type, params)
     end
 
-    def fetch_id(record, params)
+    def fully_accurate_link_hash(record, record_type, params = {})
+      Link.serialize_rails_route_self(record, record_type, params)
+    end
+
+    def fetch_id(record, id_method_name_to_use, params)
       if object_block.present?
         object = FastJsonapi.call_proc(object_block, record, params)
-        return object.map { |item| item.public_send(id_method_name) } if object.respond_to? :map
+        return object.map { |item| item.public_send(id_method_name_to_use) } if object.respond_to? :map
 
-        return object.try(id_method_name)
+        return object.try(id_method_name_to_use)
       end
-      record.public_send(id_method_name)
+      record.public_send(id_method_name_to_use)
     # rescue StandardError
-    #   nil # tollerate mistakes and output nothing
+    #   nil # probably best that the code bombs
     end
 
     def run_key_transform(input)

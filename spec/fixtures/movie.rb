@@ -59,11 +59,7 @@ class MovieSerializer
 
   belongs_to :actor_or_user,
              id_method_name: :uid,
-             polymorphic: {
-               Actor => :actor,
-               User => :user
-             }
-
+             polymorphic: true
   has_many(
     :actors
   )
@@ -76,24 +72,13 @@ class MovieSerializer
   has_many(
     :actors_and_users,
     id_method_name: :uid,
-    polymorphic: {
-      Actor => :actor,
-      User => :user
-    }
-  ) do |obj|
-    obj.polymorphics
-  end
-
-  has_many(
-    :dynamic_actors_and_users,
-    id_method_name: :uid,
     polymorphic: true
   ) do |obj|
     obj.polymorphics
   end
 
   has_many(
-    :auto_detected_actors_and_users,
+    :non_polymorphic_actors_and_users,
     id_method_name: :uid
   ) do |obj|
     obj.polymorphics
@@ -113,6 +98,15 @@ module Cached
       serializer: :user
     ) do |obj|
       obj.owner
+    end
+  end
+end
+
+
+module Selfless
+  class MovieSerializer < ::MovieSerializer
+    link rel: :self, system: :SomeSystem do |obj|
+      "some overridden self link"
     end
   end
 end
