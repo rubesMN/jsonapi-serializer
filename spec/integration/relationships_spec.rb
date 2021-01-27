@@ -101,82 +101,78 @@ RSpec.describe JSONAPI::Serializer do
 
     end
 
-    context 'with include' do
-      #fix this to adopt field.sub_field.sub_field and unify sparsefields
+    context 'with compound include' do
+      let(:fields) do
+        [:name,
+        {owner: [:first_name, :last_name]},
+        :release_year,
+        {creator: [:first_name, :last_name]},
+        {actors: [:first_name,
+                   :email,
+                   {played_movies: [:name,
+                                    :release_year,
+                                    {creator: [:email]},
+                                    {actors: [:email]}]},
+                   {favorite_movie: [:name]}]}
+        ]
+      end
+      context 'with links' do
+        let(:params) do
+          { fields: fields }
+        end
+        it do
+          expect(serialized.keys).to match_array(%w(id name owner release_year creator actors _links))
+
+          expect(serialized['owner'].keys).to match_array(%w[id first_name last_name _links])
+          expect(serialized['creator'].keys).to match_array(%w[id first_name last_name _links])
+
+          expect(serialized['actors'].size).to be_between(2,5)
+          expect(serialized['actors'][0].keys).to match_array(%w[id first_name email played_movies favorite_movie _links])
+          expect(serialized['actors'][0]['played_movies'][0].keys).to match_array(%w[id name release_year creator actors _links])
+          expect(serialized['actors'][0]['played_movies'][0]['creator'].keys).to match_array(%w[id email _links])
+          expect(serialized['actors'][0]['played_movies'][0]['actors'][0].keys).to match_array(%w[id email _links])
+          expect(serialized['actors'][0]['favorite_movie'].keys).to match_array(%w[id name _links])
+        end
+      end
+
+      context 'without links' do
+        let(:params) do
+          { fields: fields, no_links: 1 }
+        end
+        it do
+          expect(serialized.keys).to match_array(%w(id name owner release_year creator actors))
+
+          expect(serialized['owner'].keys).to match_array(%w[id first_name last_name])
+          expect(serialized['creator'].keys).to match_array(%w[id first_name last_name])
+
+          expect(serialized['actors'].size).to be_between(2,5)
+          expect(serialized['actors'][0].keys).to match_array(%w[id first_name email played_movies favorite_movie ])
+          expect(serialized['actors'][0]['played_movies'][0].keys).to match_array(%w[id name release_year creator actors ])
+          expect(serialized['actors'][0]['played_movies'][0]['creator'].keys).to match_array(%w[id email ])
+          expect(serialized['actors'][0]['played_movies'][0]['actors'][0].keys).to match_array(%w[id email ])
+          expect(serialized['actors'][0]['favorite_movie'].keys).to match_array(%w[id name ])
+        end
+      end
+
+    end
+
+    context 'with `if` conditions' do
       let(:params) do
-        { include: [:actors] }
+        {
+          fields: [:actors],
+          params: { conditionals_off: 'yes' }
+        }
       end
 
-      xit do
-        movie.actors.each do |actor|
-          expect(serialized['included']).to include(
-            have_type('actor')
-            .and(have_id(actor.uid))
-            .and(have_relationship('played_movies')
-            .with_data([{ 'id' => actor.movies[0].id, 'type' => 'movie' }]))
-          )
-        end
-      end
+      it do
+        expect(serialized.keys).to match_array(%w(id actors _links))
 
-      context 'with `if` conditions' do
-        let(:params) do
-          {
-            include: ['actors'],
-            params: { conditionals_off: 'yes' }
-          }
-        end
+        expect(serialized['actors'].size).to be_between(2,5)
+        expect(serialized['actors'][0].keys).to match_array(%w[id first_name last_name favorite_movie _links])
+        expect(serialized['actors'][1].keys).to match_array(%w[id first_name last_name favorite_movie _links])
 
-        xit do
-          movie.actors.each do |actor|
-            expect(serialized['included']).not_to include(
-              have_type('actor')
-              .and(have_id(actor.uid))
-              .and(have_relationship('played_movies'))
-            )
-          end
-        end
-      end
-
-      context 'with has_many polymorphic' do
-        let(:params) do
-          { include: ['actors_and_users.played_movies'] }
-        end
-
-        xit do
-          expect(serialized['included']).to include(
-            have_type('user').and(have_id(movie.polymorphics[0].uid))
-          )
-
-          expect(serialized['included']).to include(
-            have_type('movie').and(have_id(movie.polymorphics[1].movies[0].id))
-          )
-
-          expect(serialized['included']).to include(
-            have_type('actor')
-            .and(have_id(movie.polymorphics[1].uid))
-            .and(
-              have_relationship('played_movies').with_data(
-                [{
-                  'id' => movie.polymorphics[1].movies[0].id,
-                  'type' => 'movie'
-                }]
-              )
-            )
-          )
-        end
-      end
-
-      context 'with belongs_to polymorphic' do
-        let(:params) do
-          { include: ['actor_or_user'] }
-        end
-
-        xit do
-          expect(serialized['included']).to include(
-            have_type('actor').and(have_id(movie.actor_or_user.uid))
-          )
-        end
       end
     end
+
   end
 end

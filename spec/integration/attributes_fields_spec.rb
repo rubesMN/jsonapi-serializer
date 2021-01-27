@@ -15,7 +15,7 @@ RSpec.describe JSONAPI::Serializer do
     it do
       expect(serialized[:id]).to eq(actor.uid)
 
-      expect(serialized.keys).to match_array([:first_name, :last_name, :email, :id, :played_movies, :_links])
+      expect(serialized.keys).to match_array([:first_name, :last_name, :email, :id, :played_movies, :favorite_movie, :_links])
       expect(serialized[:first_name]).to eq(actor.first_name)
       expect(serialized[:last_name]).to eq(actor.last_name)
       expect(serialized[:email]).to eq(actor.email)

@@ -61,7 +61,7 @@ RSpec.describe JSONAPI::Serializer do
 
         # Expect cached keys to match all valid actor fields (no fieldset)
         gen_cache_options_NO_fields = Cached::ActorSerializer.record_cache_options({namespace: 'test'}, nil, {})
-        expect(cache_store_actor.read(key_actor, gen_cache_options_NO_fields).keys).to eq(%i[id first_name last_name email played_movies _links])
+        expect(cache_store_actor.read(key_actor, gen_cache_options_NO_fields).keys).to eq(%i[id first_name last_name email played_movies favorite_movie _links])
         expect(cache_store_actor.delete(key_actor, gen_cache_options_NO_fields)).to be(true)
 
         expect(cache_store_actor.delete(key_actor, gen_cache_options_w_fields)).to be(true)
