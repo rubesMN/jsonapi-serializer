@@ -1,16 +1,37 @@
 # JSON:API Serialization Library
 
-A fast serializer for Ruby Objects not in the jsonapi spec.  Just get your stuff fast. thats it
+A fast serializer for Ruby Objects *not* in the jsonapi spec.  Just get your stuff fast, nested, and deeply selectable.
 
-Previously this project was called **jsonapi-serializer**, we forked the project
-and renamed it to **jsonapi/serializer** in order to remove restrictions around nested
-'include'd objects being within a completely separate key making parsing json not the
-way pretty much most of the internet does it.  Also, disliked the 'attributes', 'type' and 'relationships' 
-keys and even the concepts of relationships being specified with only an ID and type,..  but kept the 'meta' and '_links'
+Originally this project was called **jsonapi-serializer** originating from a netflix effort.
+Some folks forked the project and renamed it to **jsonapi/serializer**.  This fork is one of 200+ forks BUT is a significant 
+departure from **jsonapi/serializer**. For now I'm keeping the name but not following the JSON-API format which
+most dev organizations dont really do.  
 
-Also, nobody changes the README file for any changes they do,.. which is frustrating.  
+Again, this GEM does not output in JSON-api format, but, keep to the performance goals set out originally
+by the netflix team.  The emitted format is what most would expect with the 
+following highlights:
+* No 'attributes', 'links', nor 'relationship' keys.  Output is simple key/value as we've all been accustomed to as programmers.
+* The 'links' key is replaced with '_links' and outputs in HATEOAS format as an array
+* Sub-object nesting is allowed but limited to 3 for full serialization with one extra containing ID and links.  This 
+  helps large dev organizations from inadvertantly emitting globs and globs of JSON when fields are added
+  to downstream nested objects and their associated serializers.  This is the biggest problem with the use
+  of RABL, jbuilder, or Draper decorators when they share class/file views which emit json downstream.
+* The concept of 'include' has been unified with fields in a nested way now allowing deep selection
+  of the fields you want in the most efficient way I could envision.  See tests for examples.
+* A self link is added for you by default to every object.  _links can be requested to be removed for 
+json size limitations by adding :no_links to the options (which you can grab from your query string)
+* Missing or unresolved serializer classes on relationships turns the output into {'id', '_links'}  
+* Use of the dynamic serializers results in {'id', 'type', '_links'} output
+* Use of the polymorphic identifier results in {'id', 'type', '_links'}
+* Over time the performance emphasis got lost as programmers added features to the project.  Notable is large array 
+output SQL, when no serializer is identified (or at level 4), turns into obj.subObj_ids query which avoids
+  pulling all objects into memory and emitted as {'id', '_links'} 
 
-I would like to thank the Netflix teamand the jsonapi-serializer teams for their initial work!
+
+Also, contributors skipped updating the README file for some reason,.. which is frustrating.  I've removed
+support for some odd features which were undocumented.
+
+I would like to thank the Netflix team, the jsonapi-serializer team, and the jsonapi/serializer for their initial work!
 
 # Performance Comparison
 
@@ -54,6 +75,7 @@ article in the `docs` folder for any questions related to methodology.
 * Support for `belongs_to`, `has_many` and `has_one`
 * Support for compound documents
 * Optimized serialization of compound documents
+* Advanced fields selection mechanism regardless of where in the json it is emitted
 * Caching
 
 ## Requirements
@@ -81,52 +103,77 @@ a Rails project:
 
     rails g serializer Movie name year
 
-This will create a new serializer in `app/serializers/movie_serializer.rb`
+This will create a new serializer in `app/serializers/movie_serializer.rb`. Generated 
+serializers arent going to help much.. use the below examples.
 
-### Model Definition
+### Example Model for our doc purposes
 
 ```ruby
 class Movie
-  attr_accessor :id, :name, :year, :actor_ids, :owner_id, :movie_type_id
+  attr_accessor :id, :name, :year, :actors, :creator
+
+  def url(obj = nil)
+    @url ||= FFaker::Internet.http_url
+    return @url if obj.nil?
+
+    @url + '?' + obj.hash.to_s
+  end
+
+end
+class Actor < User
+  attr_accessor :movies
+  
+  def bio_link
+    "https://www.imdb.com/name/nm0000098/"
+  end
+  
+  def favorite_movie
+    movies.present? ? movies[0] : nil
+  end
+
+end
+class User
+  attr_accessor :uid, :first_name, :last_name, :email
+
 end
 ```
 
-### Serializer Definition
+### Serializer Definition Example
 
 ```ruby
 class MovieSerializer
   include JSONAPI::Serializer
 
-  set_type :movie  # optional
-  set_id :owner_id # optional
-  attributes :name, :year
-  has_many :actors
-  belongs_to :owner, record_type: :user
-  belongs_to :movie_type
-end
-```
-
-### Sample Object
-
-```ruby
-movie = Movie.new
-movie.id = 232
-movie.name = 'test movie'
-movie.actor_ids = [1, 2, 3]
-movie.owner_id = 3
-movie.movie_type_id = 1
-movie
-
-movies =
-  2.times.map do |i|
-    m = Movie.new
-    m.id = i + 1
-    m.name = "test movie #{i}"
-    m.actor_ids = [1, 2, 3]
-    m.owner_id = 3
-    m.movie_type_id = 1
-    m
+  set_system :movie_service
+  set_type :movie  # highly recommended 
+  attributes :name # can be list of attributes comma separated
+  attribute :release_year do |object|
+    object.year # way to return the attr/obj to serialize from movie object 
   end
+  link rel: :self, link_method_name: :url # you can override the auto-generated :self link
+  has_many :actors  # looks for class ActorsSerializer
+  belongs_to :creator, serializer: UserSerializer
+end
+
+class ActorSerializer < UserSerializer # normally dont do inheritance.. couple side affects in that
+  set_type :actor # recommended 
+
+  has_many :movies, key: :played_movies # using key is another way to change the output json key
+
+  has_one :favorite_movie, serializer: :movie
+
+  link rel: :bio, system: :IMDB, link_method_name: :bio_link
+  link rel: :hair_salon_discount do |obj|
+    "www.somesalon.com/#{obj.uid}"
+  end
+end
+class UserSerializer
+  include JSONAPI::Serializer
+
+  set_id :uid
+  attributes :first_name, :last_name, :email
+
+end
 ```
 
 ### Object Serialization
@@ -141,38 +188,236 @@ hash = MovieSerializer.new(movie).serializable_hash
 json_string = MovieSerializer.new(movie).serializable_hash.to_json
 ```
 
+#### In Rails application controller 
+```ruby
+options = {}
+options[:fields] = JSON.parse(params[:fields])
+options[:params] = {
+  current_user: current_user
+}
+options[:no_links] = params[:no_links] unless params[:no_links].blank?
+respond_with MovieSerializer.new(movie, options).serializable_hash
+```
+
 #### Serialized Output
+Notice that we've defined an infinite loop that is shorted out due to the nesting limitations.
+Actors contain movies which have actors and so on.. 
 
 ```json
 {
-  "data": {
-    "id": "3",
-    "type": "movie",
-    "attributes": {
-      "name": "test movie",
-      "year": null
-    },
-    "relationships": {
-      "actors": {
-        "data": [
-          {
-            "id": "1",
-            "type": "actor"
+  "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+  "name": "Legend of Blonde Friday",
+  "release_year": "1948",
+  "actors": [
+    {
+      "id": "8447b895-79a5-4860-b5b5-901a7f7e441b",
+      "first_name": "Lenore",
+      "last_name": "Bauch",
+      "email": "darcey@schamberger.co.uk",
+      "played_movies": [
+        {
+          "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+          "name": "Legend of Blonde Friday",
+          "release_year": "1948",
+          "creator": {
+            "id": "e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3",
+            "first_name": "Sierra",
+            "last_name": "Nikolaus",
+            "email": "ela.emmerich@walter.ca",
+            "_links": [
+              {
+                "rel": "self",
+                "system": "",
+                "type": "GET",
+                "href": "/users/e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3"
+              }
+            ]
           },
+          "actors": [
+            {
+              "id": "8447b895-79a5-4860-b5b5-901a7f7e441b",
+              "first_name": "Lenore",
+              "last_name": "Bauch",
+              "email": "darcey@schamberger.co.uk",
+              "played_movies": [
+                {
+                  "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+                  "_links": [
+                    {
+                      "rel": "self",
+                      "system": "",
+                      "type": "GET",
+                      "href": "/movies/ab832b78-2af8-468e-85b6-943bad155fa5"
+                    }
+                  ]
+                }
+              ],
+              "favorite_movie": {
+                "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+                "_links": [
+                  {
+                    "rel": "self",
+                    "system": "",
+                    "type": "GET",
+                    "href": "/movies/ab832b78-2af8-468e-85b6-943bad155fa5"
+                  }
+                ]
+              },
+              "_links": [
+                {
+                  "rel": "self",
+                  "system": "",
+                  "type": "GET",
+                  "href": "Rails.application.routes.url_helpers.url_for([obj, only_path: true])"
+                },
+                {
+                  "rel": "bio",
+                  "system": "IMDB",
+                  "type": "GET",
+                  "href": "https://www.imdb.com/name/nm0000098/"
+                },
+                {
+                  "rel": "hair_salon_discount",
+                  "system": "",
+                  "type": "GET",
+                  "href": "www.somesalon.com/8447b895-79a5-4860-b5b5-901a7f7e441b"
+                }
+              ]
+            }
+          ],
+          "_links": [
+            {
+              "rel": "self",
+              "system": "imdb",
+              "type": "GET",
+              "href": "http://armstrong.name"
+            }
+          ]
+        }
+      ],
+      "favorite_movie": {
+        "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+        "name": "Legend of Blonde Friday",
+        "release_year": "1948",
+        "actors": [
           {
-            "id": "2",
-            "type": "actor"
+            "id": "8447b895-79a5-4860-b5b5-901a7f7e441b",
+            "first_name": "Lenore",
+            "last_name": "Bauch",
+            "email": "darcey@schamberger.co.uk",
+            "played_movies": [
+              {
+                "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+                "_links": [
+                  {
+                    "rel": "self",
+                    "system": "imdb",
+                    "type": "GET",
+                    "href": "/movies/ab832b78-2af8-468e-85b6-943bad155fa5"
+                  }
+                ]
+              }
+            ],
+            "favorite_movie": {
+              "id": "ab832b78-2af8-468e-85b6-943bad155fa5",
+              "_links": [
+                {
+                  "rel": "self",
+                  "system": "",
+                  "type": "GET",
+                  "href": "/movies/ab832b78-2af8-468e-85b6-943bad155fa5"
+                }
+              ]
+            },
+            "_links": [
+              {
+                "rel": "self",
+                "system": "",
+                "type": "GET",
+                "href": "/actors/8447b895-79a5-4860-b5b5-901a7f7e441b"
+              },
+              {
+                "rel": "bio",
+                "system": "IMDB",
+                "type": "GET",
+                "href": "https://www.imdb.com/name/nm0000098/"
+              },
+              {
+                "rel": "hair_salon_discount",
+                "system": "",
+                "type": "GET",
+                "href": "www.somesalon.com/8447b895-79a5-4860-b5b5-901a7f7e441b"
+              }
+            ]
+          }
+        ],
+        "creator": {
+          "id": "e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3",
+          "first_name": "Sierra",
+          "last_name": "Nikolaus",
+          "email": "ela.emmerich@walter.ca",
+          "_links": [
+            {
+              "rel": "self",
+              "system": "",
+              "type": "GET",
+              "href": "/users/e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3"
+            }
+          ]
+        },
+        "_links": [
+          {
+            "rel": "self",
+            "system": "imdb",
+            "type": "GET",
+            "href": "http://armstrong.name"
           }
         ]
       },
-      "owner": {
-        "data": {
-          "id": "3",
-          "type": "user"
+      "_links": [
+        {
+          "rel": "self",
+          "system": "",
+          "type": "GET",
+          "href": "/actors/8447b895-79a5-4860-b5b5-901a7f7e441b"
+        },
+        {
+          "rel": "bio",
+          "system": "IMDB",
+          "type": "GET",
+          "href": "https://www.imdb.com/name/nm0000098/"
+        },
+        {
+          "rel": "hair_salon_discount",
+          "system": "",
+          "type": "GET",
+          "href": "www.somesalon.com/8447b895-79a5-4860-b5b5-901a7f7e441b"
         }
-      }
+      ]
     }
-  }
+  ],
+  "creator": {
+    "id": "e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3",
+    "first_name": "Sierra",
+    "last_name": "Nikolaus",
+    "email": "ela.emmerich@walter.ca",
+    "_links": [
+      {
+        "rel": "self",
+        "system": "",
+        "type": "GET",
+        "href": "/users/e4bdf0fa-107f-47c8-8db8-4ff4aa4a4ad3"
+      }
+    ]
+  },
+  "_links": [
+    {
+      "rel": "self",
+      "system": "",
+      "type": "GET",
+      "href": "http://armstrong.name"
+    }
+  ]
 }
 
 ```
@@ -252,26 +497,27 @@ end
 ```
 
 ### Links Per Object
-Links are defined using the `link` method. By default, links are read directly from the model property of the same name. In this example, `public_url` is expected to be a property of the object being serialized.
+Links are defined using the `link` method.  Links emit themselves using the a format which allows programmers to make follow on API calls.  Links have the following fields 
+* rel - short for relationship.  Here you name and effectively define the semantics of what the endpoint does.
+* system - what category of APIs or what external system does this API get called on.  Can be used to provide hostnames, SOA service identifiers, or used to do client-side load balancing.
+* type - GET, POST, PUT or some other transport identification
+* href - relative or absolute URL to the API
 
-You can configure the method to use on the object for example a link with key `self` will get set to the value returned by a method called `url` on the movie object.
-
-You can also use a block to define a url as shown in `custom_url`. You can access params in these blocks as well as shown in `personalized_url`
+You can configure the method from which to get the href endpoint or provide a block to emit the value.  Both mechanisms pass in the object which you are serializing (movie in this example)
+and optionally params which are passed from one serializer to the next as we nest sub-objects.
 
 ```ruby
 class MovieSerializer
   include JSONAPI::Serializer
 
-  link :public_url
-
-  link :self, :url
+  link rel: :self, link_method_name: :url
 
   link :custom_url do |object|
     "https://movies.com/#{object.name}-(#{object.year})"
   end
 
   link :personalized_url do |object, params|
-    "https://movies.com/#{object.name}-#{params[:user].reference_code}"
+    "https://movies.com/#{object.name}-#{params[:current_user].reference_code}"
   end
 end
 ```
@@ -279,7 +525,8 @@ end
 
 ### Compound Document
 
-Support for top-level and nested associations merely through the inclusion of those within the serializer.
+Support for top-level and nested associations merely through the inclusion of the relationships (subject to conditionals) within the serializer.  Other
+json 'view' frameworks work this way,.. why not this one. 
 
 ### Collection Serialization
 
@@ -348,10 +595,10 @@ class ActorSerializer
   cache_options store: Rails.cache, namespace: 'jsonapi-serializer', expires_in: 1.hour
 end
 
-serializer = ActorSerializer.new(actor, { fields: { actor: [:first_name] } })
+serializer = ActorSerializer.new(actor, { fields: [ {actor: [:first_name] } })
 ```
 
-The following cache namespace will be generated: `'jsonapi-serializer-fieldset:first_name'`.
+The following cache namespace will be generated: `'jsonapi-serializer-fieldset:actor:first_name'` and the key will be the actor's id.
 
 ### Params
 
@@ -477,19 +724,20 @@ class MovieSerializer
 end
 ```
 
-For more advanced cases, such as polymorphic relationships and Single Table Inheritance, you may need even greater control to select the serializer based on the specific object or some specified serialization parameters. You can do by defining the serializer as a `Proc`:
+For more advanced cases, such as polymorphic relationships and Single Table Inheritance, you may need even greater control to select the serializer based on the specific 
+object or some specified serialization parameters.  Doing a dynamically constructed serializer will result in lowered serialization performance and currently only
+allowed for has_one and belongs_to relationships.  I welcome someone volunteering to make this work for has_many relationships, however, its relatively easy to replicate 
+this behavior using a generic serializer and add conditional attributes and relationships.  To use this, define the serializer as a `Proc`:
 
 ```ruby
 class MovieSerializer
   include JSONAPI::Serializer
 
-  has_many :actors, serializer: Proc.new do |record, params|
-    if record.comedian?
-      ComedianSerializer
-    elsif params[:use_drama_serializer]
-      DramaSerializer
-    else
+  has_one :creator, serializer: Proc.new do |record, params|
+    if record.actor?
       ActorSerializer
+    else
+      UserSerializer
     end
   end
 end
@@ -497,17 +745,62 @@ end
 
 ### Sparse Fieldsets
 
-Attributes and relationships can be selectively returned per record type by using the `fields` option.
+Attributes and relationships can be selectively returned by using the `fields` option which applies to attributes and relationships.
 
 ```ruby
 class MovieSerializer
   include JSONAPI::Serializer
 
-  attributes :name, :year
+  set_system :movie_service
+  set_type :movie  # highly recommended 
+  attributes :name 
+  attribute :release_year do |object|
+    object.year # way to return the attr/obj to serialize from movie object 
+  end
+  link rel: :self, link_method_name: :url # you can override the auto-generated :self link
+  has_many :actors  # looks for class ActorsSerializer
+  belongs_to :creator, serializer: UserSerializer
 end
 
-serializer = MovieSerializer.new(movie, { fields: { movie: [:name] } })
+class ActorSerializer < UserSerializer # normally dont do inheritance.. couple side affects in that
+  set_type :actor # recommended 
+
+  has_many :movies, key: :played_movies # using key is another way to change the output json key
+
+  has_one :favorite_movie, serializer: :movie
+
+  link rel: :bio, system: :IMDB, link_method_name: :bio_link
+  link rel: :hair_salon_discount do |obj|
+    "www.somesalon.com/#{obj.uid}"
+  end
+end
+
+class UserSerializer
+  include JSONAPI::Serializer
+
+  set_id :uid
+  attributes :first_name, :last_name, :email
+
+end
+options = {}
+options[:fields] =  [:name,
+                    :release_year,
+                    {creator: [:first_name, :last_name]},
+                    {actors: [:first_name,
+                              :email,
+                              {played_movies: [:name,
+                                               :release_year,
+                                               {creator: [:email]}]},
+                              {favorite_movie: [:name]}]}
+]
+serializer = MovieSerializer.new(movie, options)
 serializer.serializable_hash
+```
+
+You have no option with :id, nor with :_links unless you pass in {no_links: 1} into the options as such
+
+```ruby
+options[:no_links] = params[:no_links] unless params[:no_links].blank?
 ```
 
 ### Using helper methods
@@ -576,8 +869,9 @@ end
 
 Option | Purpose | Example
 ------------ | ------------- | -------------
-set_type | Type name of Object | `set_type :movie`
-key | Key of Object | `belongs_to :owner, key: :user`
+set_type | Type name of Object and required if you define a different serializer class | `set_type :movie`
+set_system_type | Passes system to :self and all other links which do not have them provided | `set_system_type :user_service`
+key | Key of Object.  This is a far more performant way to change the json key than if providing a name a block to retrieve the object. | fast: `belongs_to :owner, key: :user`  slower: `belongs_to :user { |obj| obj.owner }`
 set_id | ID of Object | `set_id :owner_id` or `set_id { \|record, params\| params[:admin] ? record.id : "#{record.name.downcase}-#{record.id}" }`
 cache_options | Hash with store to enable caching and optional further cache options | `cache_options store: ActiveSupport::Cache::MemoryStore.new, expires_in: 5.minutes`
 id_method_name | Set custom method name to get ID of an object (If block is provided for the relationship, `id_method_name` is invoked on the return value of the block instead of the resource object) | `has_many :locations, id_method_name: :place_ids`
@@ -585,7 +879,6 @@ object_method_name | Set custom method name to get related objects | `has_many :
 record_type | Set custom Object Type for a relationship | `belongs_to :owner, record_type: :user`
 serializer | Set custom Serializer for a relationship | `has_many :actors, serializer: :custom_actor`, `has_many :actors, serializer: MyApp::Api::V1::ActorSerializer`, or `has_many :actors, serializer -> (object, params) { (return a serializer class) }`
 polymorphic | Allows different record types for a polymorphic association | `has_many :targets, polymorphic: true`
-polymorphic | Sets custom record types for each object class in a polymorphic association | `has_many :targets, polymorphic: { Person => :person, Group => :group }`
 
 ### Performance Instrumentation
 
@@ -615,61 +908,6 @@ tests. To run tests use the following command:
 
 ```bash
 rspec
-```
-
-## Deserialization
-We currently do not support deserialization, but we recommend to use any of the next gems:
-
-### [JSONAPI.rb](https://github.com/stas/jsonapi.rb)
-
-This gem provides the next features alongside deserialization:
-- Collection meta
-- Error handling
-- Sparse fields and sub-field identification to allow filtering uniformly
-- Filtering and sorting
-- Pagination
-
-## Migrating from Netflix/fast_jsonapi
-
-If you come from [Netflix/fast_jsonapi](https://github.com/Netflix/fast_jsonapi), here is the instructions to switch.
-
-### Modify your Gemfile
-
-```diff
-- gem 'fast_jsonapi'
-+ gem 'jsonapi-serializer'
-```
-
-### Replace all constant references
-
-```diff
-class MovieSerializer
-- include FastJsonapi::ObjectSerializer
-+ include JSONAPI::Serializer
-end
-```
-
-### Replace removed methods
-
-```diff
-- json_string = MovieSerializer.new(movie).serialized_json
-+ json_string = MovieSerializer.new(movie).serializable_hash.to_json
-```
-
-### Replace require references
-
-```diff
-- require 'fast_jsonapi'
-+ require 'jsonapi/serializer'
-```
-
-### Update your cache options
-
-See [docs](https://github.com/jsonapi-serializer/jsonapi-serializer#caching).
-
-```diff
-- cache_options enabled: true, cache_length: 12.hours
-+ cache_options store: Rails.cache, namespace: 'jsonapi-serializer', expires_in: 1.hour
 ```
 
 ## Contributing
