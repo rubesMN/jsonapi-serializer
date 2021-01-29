@@ -1,4 +1,4 @@
-# JSON:API Serialization Library
+# ~~JSON:API~~ Json Serialization Library
 
 A fast serializer for Ruby Objects *not* in the jsonapi spec.  Just get your stuff fast, nested, and deeply selectable.
 
