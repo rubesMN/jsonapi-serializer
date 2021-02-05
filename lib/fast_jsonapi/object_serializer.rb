@@ -162,16 +162,8 @@ module FastJsonapi
       end
 
       def add_self_link
-        link rel: :self do |obj|
-          # todo: yes.. not good.. but this is the only Rails dependency we have and setting up an entire
-          #       dummy application for one line to work can be done later
-          #       when other rails dependencies creep in, remove if and configure spec_helper to include rspec/rails
-          if ENV['RAILS_ENV'].nil? || ENV['RAILS_ENV']!='test'
-            "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
-          else
-            "Rails.application.routes.url_helpers.url_for([obj, only_path: true])"
-          end
-
+        link rel: :self, no_link_if_err: true do |obj|
+          "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
         end
       end
 
@@ -308,7 +300,8 @@ module FastJsonapi
                                                 rel: run_key_transform(params[:rel]),
                                                 system: params[:system].presence || '',
                                                 link_method_name: params[:link_method_name].presence || block,
-                                                type: params[:type].presence || "GET"   }
+                                                type: params[:type].presence || "GET",
+                                                no_link_if_err: params[:no_link_if_err]   }
               )
             else
               dl_index += 1
@@ -319,7 +312,8 @@ module FastJsonapi
                                    rel: run_key_transform(params[:rel]),
                                    system: params[:system].presence || '',
                                    link_method_name: params[:link_method_name].presence || block,
-                                   type: params[:type].presence || "GET"   }
+                                   type: params[:type].presence || "GET",
+                                   no_link_if_err: params[:no_link_if_err] }
           )
         end
       end

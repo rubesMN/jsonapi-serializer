@@ -156,6 +156,7 @@ class MovieSerializer
 end
 
 class ActorSerializer < UserSerializer # normally dont do inheritance.. couple side affects in that
+  include JSONAPI::Serializer
   set_type :actor # recommended 
 
   has_many :movies, key: :played_movies # using key is another way to change the output json key
@@ -268,7 +269,7 @@ Actors contain movies which have actors and so on..
                   "rel": "self",
                   "system": "",
                   "type": "GET",
-                  "href": "Rails.application.routes.url_helpers.url_for([obj, only_path: true])"
+                  "href": "/actors/8447b895-79a5-4860-b5b5-901a7f7e441b"
                 },
                 {
                   "rel": "bio",

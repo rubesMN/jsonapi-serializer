@@ -110,3 +110,14 @@ module Selfless
     end
   end
 end
+
+module SpecialSelf
+  class MovieThrowSerializer < ::MovieSerializer
+    link rel: :self, link_method_name: :some_bad_method
+  end
+  class MovieNoThrowSerializer
+    include JSONAPI::Serializer
+    link rel: :self, no_link_if_err: true, link_method_name: :some_bad_method
+    attribute :name
+  end
+end
