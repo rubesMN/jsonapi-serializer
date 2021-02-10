@@ -16,6 +16,7 @@ module FastJsonapi
                       :transform_method,
                       :record_type,
                       :system_type,
+                      :api_namespace,
                       :record_id,
                       :cache_store_instance,
                       :cache_store_options,

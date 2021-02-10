@@ -161,9 +161,13 @@ module FastJsonapi
         self.system_type = system_type_name
       end
 
+      def set_api_namespace(*api_namespace)
+        self.api_namespace = api_namespace
+      end
+
       def add_self_link
         link rel: :self, no_link_if_err: true do |obj|
-          "#{Rails.application.routes.url_helpers.url_for([obj, only_path: true])}" # requires Rails 4.1.8+
+          "#{Rails.application.routes.url_helpers.url_for([*self.api_namespace, obj, only_path: true])}" # requires Rails 4.1.8+
         end
       end
 
