@@ -190,10 +190,10 @@ module FastJsonapi
     def id_hash(id, record_type, original_options, params, actual_record = nil)
       if id.present?
         if record_type
-          if actual_record # use active support and get the link right.  ignoring no_links on purpose
+          if actual_record # use active support and get the link right.  ignoring no_links and no_self_links on purpose
             { id: id.to_s, type: record_type, _links: fully_accurate_link_hash(actual_record, record_type, params) }
           else
-            if original_options[:no_links].blank?
+            if original_options[:no_links].blank? && original_options[:no_self_links].blank?
               { id: id.to_s, _links: trivial_link_hash(id, record_type, params) }
             else
               { id: id.to_s }

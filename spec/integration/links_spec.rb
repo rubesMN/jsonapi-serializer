@@ -53,6 +53,7 @@ RSpec.describe JSONAPI::Serializer do
           expect(serialized5['_links'][0]['href']).to start_with("http:")
           expect(serialized5['actors'][0]['_links'].size).to eq(2)
           expect(serialized5['actors'][0]['_links'][0]['rel']).to eq("bio")
+          expect(serialized5['actors'][0]['played_movies'][0]['actors'][0]['played_movies'][0]['_links']).to be_nil
         end
       end
 
