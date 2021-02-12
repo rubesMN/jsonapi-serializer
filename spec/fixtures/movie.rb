@@ -121,3 +121,16 @@ module SpecialSelf
     attribute :name
   end
 end
+
+module Linkless
+  class MovieSerializer
+    include JSONAPI::Serializer
+
+    set_type :movie
+    attributes :name
+    attribute :release_year do |object|
+      object.year
+    end
+  end
+
+end

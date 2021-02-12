@@ -19,7 +19,9 @@ following highlights:
 * The concept of 'include' has been unified with fields in a nested way now allowing deep selection
   of the fields you want in the most efficient way I could envision.  See tests for examples.
 * A self link is added for you by default to every object.  _links can be requested to be removed for 
-json size limitations by adding :no_links to the options (which you can grab from your query string)
+json size limitations by adding :no_links to the options (which you can grab from your query string) or
+  you can use :no_self_links added to the options to only emit links which are explicitly programmed
+  in the serializer
 * Missing or unresolved serializer classes on relationships turns the output into {'id', '_links'}  
 * Use of the dynamic serializers results in {'id', 'type', '_links'} output
 * Use of the polymorphic identifier results in {'id', 'type', '_links'}
@@ -872,6 +874,7 @@ Option | Purpose | Example
 ------------ | ------------- | -------------
 set_type | Type name of Object and required if you define a different serializer class | `set_type :movie`
 set_system_type | Passes system to :self and all other links which do not have them provided | `set_system_type :user_service`
+set_api_namespace | The auto-self _link insertion uses Rails helper url_for.  If you have namespaces on your routes, use this to fill in those namespaces. | `set_api_namespace :api`
 key | Key of Object.  This is a far more performant way to change the json key than if providing a name a block to retrieve the object. | fast: `belongs_to :owner, key: :user`  slower: `belongs_to :user { |obj| obj.owner }`
 set_id | ID of Object | `set_id :owner_id` or `set_id { \|record, params\| params[:admin] ? record.id : "#{record.name.downcase}-#{record.id}" }`
 cache_options | Hash with store to enable caching and optional further cache options | `cache_options store: ActiveSupport::Cache::MemoryStore.new, expires_in: 5.minutes`

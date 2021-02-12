@@ -42,6 +42,30 @@ RSpec.describe JSONAPI::Serializer do
       end
     end
 
+    context 'no_self_links set' do
+      let (:serialized5) do
+        MovieSerializer.new(movie, {no_self_links: 1}).serializable_hash.as_json
+      end
+      context 'when self overridden' do
+        it 'direct self link remains' do
+          expect(serialized5['_links'].size).to eq(1)
+          expect(serialized5['_links'][0]['rel']).to eq("self")
+          expect(serialized5['_links'][0]['href']).to start_with("http:")
+          expect(serialized5['actors'][0]['_links'].size).to eq(2)
+          expect(serialized5['actors'][0]['_links'][0]['rel']).to eq("bio")
+        end
+      end
+
+      context 'when no links created' do
+        let (:serialized6) do
+          Linkless::MovieSerializer.new(movie, {no_self_links: 1}).serializable_hash.as_json
+        end
+        it 'links are empty and not null' do
+          expect(serialized6['_links']).to_not be_nil
+          expect(serialized6['_links'].size).to eq(0)
+        end
+      end
+    end
     context 'no_links set' do
       let (:serialized3) do
         MovieSerializer.new(movie, {no_links: 1}).serializable_hash.as_json

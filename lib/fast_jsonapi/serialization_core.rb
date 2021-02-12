@@ -26,9 +26,9 @@ module FastJsonapi
 
     class_methods do
 
-      def links_hash(record, params = {})
+      def links_hash(record, original_options, params = {})
         data_links.each_with_object([]) do |link, array|
-          link.serialize(record, params, array)
+          link.serialize(record, params, array) if original_options[:no_self_links].blank? || !link.no_link_if_err
         end
       end
 
@@ -68,14 +68,14 @@ module FastJsonapi
             temp_hash = { id: id_from_record(record, params) }
             temp_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
             temp_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
-            temp_hash[:_links] = links_hash(record, params) if data_links.present? && original_options[:no_links].blank?
+            temp_hash[:_links] = links_hash(record, original_options, params) if data_links.present? && original_options[:no_links].blank?
             temp_hash
           end
         else
           record_hash = { id: id_from_record(record, params) }
           record_hash.merge!(attributes_hash(record, fieldset, params)) if attributes_to_serialize.present?
           record_hash.merge!(relationships_hash(record, fieldset, original_options, params)) if relationships_to_serialize.present?
-          record_hash[:_links] = links_hash(record, params) if data_links.present? && original_options[:no_links].blank?
+          record_hash[:_links] = links_hash(record, original_options, params) if data_links.present? && original_options[:no_links].blank?
         end
 
         record_hash
