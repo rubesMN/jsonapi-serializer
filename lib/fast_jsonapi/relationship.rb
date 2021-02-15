@@ -42,7 +42,7 @@ module FastJsonapi
         initialize_static_serializer unless @initialized_static_serializer
 
         if relationship_type == :has_many
-          if @static_serializer && ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+          if @static_serializer && ((original_options&.dig(:nest_level)) <= NEST_MAX_LEVEL)
             relevant_objs = fetch_associated_object(record, serialization_params)
             if relevant_objs.present?
               data = relevant_objs.each_with_object([]) do |sub_obj, array|
@@ -50,10 +50,10 @@ module FastJsonapi
               end
             end
           else
-            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params)  if ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
+            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params)  if ((original_options&.dig(:nest_level)) <= (NEST_MAX_LEVEL + 1))
           end
         else
-          if ((original_options&.dig(:nest_level) || 0) <= NEST_MAX_LEVEL)
+          if ((original_options&.dig(:nest_level)) <= NEST_MAX_LEVEL)
             relevant_obj = fetch_associated_object(record, serialization_params)
             if relevant_obj.present?
               serializer_to_use = (@serializer && @serializer.is_a?(Proc)) ? FastJsonapi.call_proc(@serializer, relevant_obj, serialization_params) :  @static_serializer
@@ -64,7 +64,7 @@ module FastJsonapi
               end
             end
           else
-            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params) if ((original_options&.dig(:nest_level) || 0) <= (NEST_MAX_LEVEL + 1))
+            data = ids_hash_from_record_and_relationship(record, original_options, serialization_params) if ((original_options&.dig(:nest_level)) <= (NEST_MAX_LEVEL + 1))
           end
         end
 
@@ -190,10 +190,10 @@ module FastJsonapi
     def id_hash(id, record_type, original_options, params, actual_record = nil)
       if id.present?
         if record_type
-          if actual_record # use active support and get the link right.  ignoring no_links and no_self_links on purpose
+          if actual_record # use active support and get the link right.  ignoring no_links and no_auto_links on purpose
             { id: id.to_s, type: record_type, _links: fully_accurate_link_hash(actual_record, record_type, params) }
           else
-            if original_options[:no_links].blank? && original_options[:no_self_links].blank?
+            if original_options[:no_links].blank? && original_options[:no_auto_links].blank?
               { id: id.to_s, _links: trivial_link_hash(id, record_type, params) }
             else
               { id: id.to_s }

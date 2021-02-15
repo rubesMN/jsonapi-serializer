@@ -42,9 +42,9 @@ RSpec.describe JSONAPI::Serializer do
       end
     end
 
-    context 'no_self_links set' do
+    context 'no_auto_links set' do
       let (:serialized5) do
-        MovieSerializer.new(movie, {no_self_links: 1}).serializable_hash.as_json
+        MovieSerializer.new(movie, {no_auto_links: 1}).serializable_hash.as_json
       end
       context 'when self overridden' do
         it 'direct self link remains' do
@@ -59,7 +59,7 @@ RSpec.describe JSONAPI::Serializer do
 
       context 'when no links created' do
         let (:serialized6) do
-          Linkless::MovieSerializer.new(movie, {no_self_links: 1}).serializable_hash.as_json
+          Linkless::MovieSerializer.new(movie, {no_auto_links: 1}).serializable_hash.as_json
         end
         it 'links are empty and not null' do
           expect(serialized6['_links']).to_not be_nil

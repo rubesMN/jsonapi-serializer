@@ -20,7 +20,7 @@ following highlights:
   of the fields you want in the most efficient way I could envision.  See tests for examples.
 * A self link is added for you by default to every object.  _links can be requested to be removed for 
 json size limitations by adding :no_links to the options (which you can grab from your query string) or
-  you can use :no_self_links added to the options to only emit links which are explicitly programmed
+  you can use :no_auto_links added to the options to only emit links which are explicitly programmed
   in the serializer
 * Missing or unresolved serializer classes on relationships turns the output into {'id', '_links'}  
 * Use of the dynamic serializers results in {'id', 'type', '_links'} output

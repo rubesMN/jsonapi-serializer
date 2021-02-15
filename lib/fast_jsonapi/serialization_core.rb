@@ -28,7 +28,7 @@ module FastJsonapi
 
       def links_hash(record, original_options, params = {})
         data_links.each_with_object([]) do |link, array|
-          link.serialize(record, params, array) if original_options[:no_self_links].blank? || !link.no_link_if_err
+          link.serialize(record, params, array) if original_options[:no_auto_links].blank? || !link.no_link_if_err
         end
       end
 
