@@ -2,7 +2,7 @@ require 'fast_jsonapi/constants'
 module FastJsonapi
   class Relationship
     include Constants
-    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :polymorphic, :conditional_proc, :transform_method
+    attr_reader :owner, :key, :name, :id_method_name, :record_type, :object_method_name, :object_block, :serializer, :relationship_type, :polymorphic, :conditional_proc, :transform_method, :api_namespace
 
     def initialize(
       owner:,
@@ -16,7 +16,8 @@ module FastJsonapi
       relationship_type:,
       polymorphic:,
       conditional_proc:,
-      transform_method:
+      transform_method:,
+      api_namespace: # array of symbols
     )
       @owner = owner
       @key = key
@@ -30,6 +31,7 @@ module FastJsonapi
       @polymorphic = polymorphic
       @conditional_proc = conditional_proc
       @transform_method = transform_method
+      @api_namespace = api_namespace || []
       @record_types_for = {}
       @serializers_for_name = {}
     end
@@ -208,11 +210,11 @@ module FastJsonapi
     end
 
     def trivial_link_hash(id, record_type, params = {})
-      Link.serialize_rails_simple_self(id, record_type, params)
+      Link.serialize_rails_simple_self(id, record_type, @api_namespace, params)
     end
 
     def fully_accurate_link_hash(record, record_type, params = {})
-      Link.serialize_rails_route_self(record, record_type, params)
+      Link.serialize_rails_route_self(record, record_type, @api_namespace, params)
     end
 
     def fetch_id(record, id_method_name_to_use, params)

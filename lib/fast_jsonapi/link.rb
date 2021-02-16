@@ -43,21 +43,22 @@ module FastJsonapi
       end
     end
 
-    def self.serialize_rails_simple_self(id, record_type, serialization_params)
+    def self.serialize_rails_simple_self(id, record_type, api_namespaces, serialization_params)
+      context_namespace = api_namespaces.reduce(""){|ctx, namespace| "#{ctx}/#{namespace}" }
       return [{
         rel: :self,
         system: serialization_params[:system_type] || '',
         type: "GET",
-        href: "/#{record_type.to_s.pluralize}/#{id}"
+        href: "#{context_namespace}/#{record_type.to_s.pluralize}/#{id}"
       }]
     end
 
-    def self.serialize_rails_route_self(record, record_type, serialization_params)
+    def self.serialize_rails_route_self(record, record_type, api_namespaces, serialization_params)
       return [{
                 rel: :self,
                 system: record_type,
                 type: "GET",
-                href: begin "#{Rails.application.routes.url_helpers.url_for([record, only_path: true])}" rescue "unresolvable" end
+                href: begin "#{Rails.application.routes.url_helpers.url_for([*api_namespaces, record, only_path: true])}" rescue "unresolvable" end
               }]
     end
   end

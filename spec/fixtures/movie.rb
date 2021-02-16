@@ -111,6 +111,23 @@ module Selfless
   end
 end
 
+module NamespacedSelfLink
+  class MovieSerializer
+    include JSONAPI::Serializer
+
+    set_type :movie
+    attributes :name
+    has_many :actors,  serializer: :none, api_namespace: [:api, :actors]
+  end
+  class MovieSerializerActorOwner
+    include JSONAPI::Serializer
+
+    set_type :movie
+    attributes :name
+    belongs_to :owner, serializer: UserSerializer, api_namespace: [:api]
+  end
+end
+
 module SpecialSelf
   class MovieThrowSerializer < ::MovieSerializer
     link rel: :self, link_method_name: :some_bad_method

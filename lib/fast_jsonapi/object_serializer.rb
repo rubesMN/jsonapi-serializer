@@ -249,7 +249,8 @@ module FastJsonapi
           relationship_type: relationship_type,
           polymorphic: polymorphic,
           conditional_proc: options[:if],
-          transform_method: @transform_method
+          transform_method: @transform_method,
+          api_namespace: options[:api_namespace]
         )
       end
 

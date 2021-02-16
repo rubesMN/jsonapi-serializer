@@ -67,6 +67,58 @@ RSpec.describe JSONAPI::Serializer do
         end
       end
     end
+
+    context 'api_namespace set' do
+      context 'has_many' do
+        let (:serialized7) do
+          NamespacedSelfLink::MovieSerializer.new(movie, {}).serializable_hash.as_json
+        end
+        it 'expands namespace in link' do
+          expect(serialized7['_links'].size).to eq(1)
+          expect(serialized7['_links'][0]['rel']).to eq("self") # movie's own still exists
+          expect(serialized7['actors'][0]['_links'].size).to eq(1)
+          expect(serialized7['actors'][0].size).to eq(2)
+          expect(serialized7['actors'][0]['_links'][0]['rel']).to eq("self")
+          expect(serialized7['actors'][0]['_links'][0]['href']).to start_with("/api/actors/actor")
+        end
+      end
+
+      context 'belongs_to' do
+        let(:movie8) do
+          faked = Movie.fake
+          faked.actors = [Actor.fake]
+          faked.owner = User.fake
+          faked
+        end
+        context 'exceed nesting' do
+          let (:serialized8) do
+            NamespacedSelfLink::MovieSerializerActorOwner.new(movie8, {nest_level: 3}).serializable_hash.as_json
+          end
+          it 'expands namespace in link' do
+            expect(serialized8['_links'].size).to eq(1)
+            expect(serialized8['_links'][0]['rel']).to eq("self")
+            expect(serialized8['owner']['_links'].size).to eq(1)
+            expect(serialized8['owner'].size).to eq(2)
+            expect(serialized8['owner']['_links'][0]['rel']).to eq("self")
+            expect(serialized8['owner']['_links'][0]['href']).to start_with("/api/user")
+          end
+        end
+        context 'normal nesting' do
+          let (:serialized8) do
+            NamespacedSelfLink::MovieSerializerActorOwner.new(movie8, {}).serializable_hash.as_json
+          end
+          xit 'advanced optimized link but requires rails' do
+            expect(serialized8['_links'].size).to eq(1)
+            expect(serialized8['_links'][0]['rel']).to eq("self")
+            expect(serialized8['owner']['_links'].size).to eq(1)
+            expect(serialized8['owner'].size).to eq(5)
+            expect(serialized8['owner']['_links'][0]['rel']).to eq("self")
+            expect(serialized8['owner']['_links'][0]['href']).to start_with("/api/user")
+          end
+        end
+      end
+    end
+
     context 'no_links set' do
       let (:serialized3) do
         MovieSerializer.new(movie, {no_links: 1}).serializable_hash.as_json
