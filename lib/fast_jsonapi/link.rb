@@ -44,7 +44,11 @@ module FastJsonapi
     end
 
     def self.serialize_rails_simple_self(id, record_type, api_namespaces, serialization_params)
-      context_namespace = api_namespaces.reduce(""){|ctx, namespace| "#{ctx}/#{namespace}" }
+      if api_namespaces.is_a?(Array)
+        context_namespace = api_namespaces.reduce(""){|ctx, namespace| "#{ctx}/#{namespace}" }
+      else
+        context_namespace = "/#{api_namespaces}"
+      end
       return [{
         rel: :self,
         system: serialization_params[:system_type] || '',
